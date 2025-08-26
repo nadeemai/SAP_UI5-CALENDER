@@ -1,0 +1,84 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:f="sap.ui.layout.form"
+    xmlns:u="sap.ui.unified">
+    
+    <Dialog id="_IDGenDialog"
+        title="New Event"
+        class="sapUiPopupWithPadding"
+        contentWidth="500px"
+        contentHeight="auto">
+        
+        <content>
+            <VBox id="_IDGenVBox2" class="sapUiSmallMargin">
+                <f:SimpleForm id="_IDGenSimpleForm"
+                    editable="true"
+                    layout="ResponsiveGridLayout">
+                    
+                    <f:content>
+                        <Label id="_IDGenLabel6" text="Title" required="true"/>
+                        <Input id="eventeTitle" placeholder="Add a title" value="{view>/selectedEvent/title}"/>
+                        
+                        <Label id="_IDGenLabel7" text="Attendees"/>
+                        <Input id="eventAttendeees" placeholder="Invite attendees"/>
+                        
+                        <Label id="_IDGenLabel8" text="Date"/>
+                        <HBox id="_IDGenHBox1">
+                            <DatePicker
+                                id="eventDate"
+                                valueFormat="yyyy-MM-dd"
+                                placeholder="Select Date"
+                                value="{path: 'view>/selectedEvent/start', type: 'sap.ui.model.type.Date', formatOptions: { pattern: 'yyyy-MM-dd' }}"
+                                class="sapUiSmallMarginEnd"/>
+                            <TimePicker
+                                id="startTime"
+                                valueFormat="HH:mm"
+                                placeholder="Start Time"
+                                value="{path: 'view>/selectedEvent/start', type: 'sap.ui.model.type.Date', formatOptions: { pattern: 'HH:mm' }}"
+                                class="sapUiSmallMarginEnd"/>
+                            <TimePicker
+                                id="endTime"
+                                valueFormat="HH:mm"
+                                placeholder="End Time"
+                                value="{path: 'view>/selectedEvent/end', type: 'sap.ui.model.type.Date', formatOptions: { pattern: 'HH:mm' }}"/>
+                        </HBox>
+                        
+                        <Label id="_IDGenLabel9" text="Options"/>
+                        <VBox id="_IDGenVBox3">
+                            <CheckBox id="makeRecurring" text="Make recurring" selected="false"/>
+                            <CheckBox id="allDay" text="All day" selected="false"/>
+                            <CheckBox id="inPerson" text="In-person event" selected="true"/>
+                        </VBox>
+                        
+                        <Label id="_IDGenLabel10" text="Response options"/>
+                        <Select id="responseOptions" selectedKey="1">
+                            <items>
+                                <core:Item id="_IDGenItem1" key="1" text="Request responses"/>
+                                <core:Item id="_IDGenItem16" key="2" text="Don't request responses"/>
+                            </items>
+                        </Select>
+                        
+                        <Label id="_IDGenLabel11" text="Show as"/>
+                        <Select id="showAs" selectedKey="busy">
+                            <items>
+                                <core:Item id="_IDGenItem17" key="busy" text="Busy"/>
+                                <core:Item id="_IDGenItem18" key="free" text="Free"/>
+                                <core:Item id="_IDGenItem19" key="tentative" text="Tentative"/>
+                                <core:Item id="_IDGenItem20" key="outOfOffice" text="Out of office"/>
+                            </items>
+                        </Select>
+                        
+                        <Label id="_IDGenLabel12" text="Description"/>
+                        <TextArea id="eventDesceription" placeholder="Add description" rows="3"/>
+                    </f:content>
+                </f:SimpleForm>
+            </VBox>
+        </content>
+        
+        <buttons>
+            <Button id="_IDGenButton4" text="Save"  icon="sap-icon://save" press="onSaveEventFromDialog" type="Emphasized"/>
+            <Button id="_IDGenButton5" text="Cancel" press="onCancelEventFromDialog"/>
+        </buttons>
+    </Dialog>
+</core:FragmentDefinition>

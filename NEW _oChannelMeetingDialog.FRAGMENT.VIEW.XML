@@ -1,0 +1,130 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form">
+    <Dialog
+        id="channelMeetingDialog"
+        title="New meeting"
+        contentWidth="500px"
+        class="sapUiContentPadding channelMeetingDialog">
+        <content>
+            <VBox id="_IDGenVBox4" class="sapUiSmallMargin">
+                <!-- Header Section -->
+                <HBox id="_IDGenHBox2" justifyContent="SpaceBetween" class="sapUiSmallMarginBottom">
+                    <Link id="_IDGenLink" text="Scheduling Assistant" class="headerLink"/>
+                    <Button id="_IDGenButton6" text="Save" type="Emphasized" class="headerButton"/>
+                </HBox>
+                
+                <!-- Show as and Category -->
+                <HBox id="_IDGenHBox3" class="sapUiTinyMarginBottom">
+                    <Label id="_IDGenLabel15" text="Show as:" class="propertyLabel"/>
+                    <ComboBox id="_IDGenComboBox" selectedKey="Busy" width="120px" class="sapUiTinyMarginBegin">
+                        <core:Item id="_IDGenItem21" key="Busy" text="Busy"/>
+                        <core:Item id="_IDGenItem34" key="Free" text="Free"/>
+                        <core:Item id="_IDGenItem35" key="Tentative" text="Tentative"/>
+                        <core:Item id="_IDGenItem36" key="OutOfOffice" text="Out of office"/>
+                    </ComboBox>
+                    
+                    <Label id="_IDGenLabel16" text="Category:" class="propertyLabel sapUiSmallMarginBegin"/>
+                    <ComboBox id="_IDGenComboBox1" selectedKey="None" width="120px" class="sapUiTinyMarginBegin">
+                        <core:Item id="_IDGenItem37" key="None" text="None"/>
+                    </ComboBox>
+                </HBox>
+                
+                <!-- Time Zone -->
+                <HBox id="_IDGenHBox4" class="sapUiTinyMarginBottom">
+                    <Label id="_IDGenLabel17" text="Time zone:" class="propertyLabel"/>
+                    <ComboBox id="_IDGenComboBox2" selectedKey="UTC+0530" width="280px" class="sapUiTinyMarginBegin">
+                        <core:Item id="_IDGenItem38" key="UTC+0530" text="UTC+05:30 Chennai, Kolkata, Mumbai, New Delhi"/>
+                    </ComboBox>
+                </HBox>
+                
+                <!-- Response Options Link -->
+                <Link id="_IDGenLink1" text="Response options" class="sapUiTinyMarginBottom"/>
+                
+                <ToolbarSpacer id="_IDGenToolbarSpacer1"/>
+                <ToolbarSpacer id="_IDGenToolbarSpacer2"/>
+
+                <!-- Title -->
+                <Label id="_IDGenLabel18" text="Add title" labelFor="meetingTitle" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="meetingTitle" placeholder="Add title" width="100%"/>
+                
+                <!-- Attendees -->
+                <Label id="_IDGenLabel19" text="Add required attendees" labelFor="requiredAttendees" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="requiredAttendees" placeholder="Add required attendees" width="100%"/>
+                
+                <Label id="_IDGenLabel20" text="Optional" labelFor="optionalAttendees" class="subLabel"/>
+                <Input id="optionalAttendees" placeholder="Optional" width="100%"/>
+                
+                <!-- Date and Time Section -->
+                <HBox id="_IDGenHBox5" class="sapUiSmallMarginTop">
+                    <VBox id="_IDGenVBox5" width="60%" class="sapUiSmallMarginEnd">
+                        <HBox id="_IDGenHBox6">
+                            <DatePicker id="startDate" 
+                                valueFormat="yyyy-MM-dd" 
+                                displayFormat="M/d/yyyy"
+                                width="140px"
+                                class="sapUiTinyMarginEnd"/>
+                            <TimePicker id="startTitme" 
+                                valueFormat="HH:mm" 
+                                displayFormat="h:mm a"
+                                width="100px"/>
+                        </HBox>
+                        <HBox id="_IDGenHBox7" class="sapUiTinyMarginTop">
+                            <DatePicker id="endDate" 
+                                valueFormat="yyyy-MM-dd" 
+                                displayFormat="M/d/yyyy"
+                                width="140px"
+                                class="sapUiTinyMarginEnd"/>
+                            <TimePicker id="entdTime" 
+                                valueFormat="HH:mm" 
+                                displayFormat="h:mm a"
+                                width="100px"/>
+                        </HBox>
+                    </VBox>
+                    
+                    <VBox id="_IDGenVBox6" width="40%" justifyContent="Center">
+                        <Text id="_IDGenText" text="30m" class="durationText"/>
+                        <CheckBox id="allDayCheckbox" text="All day" selected="false" class="sapUiTinyMarginTop"/>
+                    </VBox>
+                </HBox>
+                
+                <!-- Recurrence -->
+                <Label id="_IDGenLabel21" text="Does not repeat" labelFor="recurrenceSelect" class="sectionLabel sapUiSmallMarginTop"/>
+                <Select id="recurrenceSelect" width="100%">
+                    <core:Item id="_IDGenItem39" key="none" text="Does not repeat"/>
+                    <core:Item id="_IDGenItem40" key="daily" text="Daily"/>
+                    <core:Item id="_IDGenItem41" key="weekly" text="Weekly"/>
+                    <core:Item id="_IDGenItem42" key="monthly" text="Monthly"/>
+                    <core:Item id="_IDGenItem43" key="yearly" text="Yearly"/>
+                    <core:Item id="_IDGenItem44" key="custom" text="Custom"/>
+                </Select>
+                
+                <!-- Channel and Online Meeting -->
+                <Label id="_IDGenLabel22" text="Add channel" labelFor="channelInput" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="channelInput" placeholder="Add channel" width="100%"/>
+                
+                <CheckBox id="onlineMeetingCheckbox" text="Online meeting" selected="true" class="sapUiSmallMarginTop"/>
+                
+                <!-- Location -->
+                <Label id="_IDGenLabel23" text="Add location" labelFor="locationInput" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="locationInput" placeholder="Add location" width="100%"/>
+                
+                <!-- Details -->
+                <Label id="_IDGenLabel24" text="Type details for this new meeting" labelFor="meetingDetails" class="sectionLabel sapUiSmallMarginTop"/>
+                <TextArea id="meetingDetails" rows="2" width="100%" placeholder="Type details for this new meeting"/>
+                
+                <!-- Agenda -->
+                <Label id="_IDGenLabel25" text="Add an agenda" labelFor="meetingAgenda" class="sectionLabel sapUiSmallMarginTop"/>
+                <TextArea id="meetingAgenda" rows="2" width="100%" placeholder="Add an agenda"/>
+            </VBox>
+        </content>
+        <!-- <beginButton>
+            <Button id="_IDGenButton8" text="Send" type="Emphasized" press="onSaveChannelMeeting"/>
+        </beginButton> -->
+        <!-- <endButton>
+            <Button id="_IDGenButton10" text="Discard" press="onCancelChannelMeeting"/>
+        </endButton> -->
+    </Dialog>
+</core:FragmentDefinition>

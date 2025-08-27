@@ -1,0 +1,161 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:l="sap.ui.layout"
+    xmlns:f="sap.ui.layout.form">
+    <Dialog
+        id="virtualAppointmentDialog"
+        title="Virtual appointment Details"
+        contentWidth="600px"
+        class="sapUiContentPadding virtualAppointmentDialog">
+        <content>
+            <VBox id="_IDGenVBox7" class="sapUiSmallMargin">
+                <!-- Header Section -->
+                <HBox id="_IDGenHBox8" justifyContent="SpaceBetween" class="sapUiSmallMarginBottom">
+                    <Link id="_IDGenLink2" text="Scheduling Assistant" class="headerLink"/>
+                </HBox>
+                
+                <!-- Show as and Category -->
+                <HBox id="_IDGenHBox9" class="sapUiTinyMarginBottom">
+                    <Label id="_IDGenLabel26" text="Show as:" class="propertyLabel"/>
+                    <ComboBox id="_IDGenComboBox3" selectedKey="Busy" width="120px" class="sapUiTinyMarginBegin">
+                        <core:Item id="_IDGenItem45" key="Busy" text="Busy"/>
+                        <core:Item id="_IDGenItem46" key="Free" text="Free"/>
+                        <core:Item id="_IDGenItem47" key="Tentative" text="Tentative"/>
+                        <core:Item id="_IDGenItem48" key="OutOfOffice" text="Out of office"/>
+                    </ComboBox>
+                    
+                    <Label id="_IDGenLabel27" text="Category:" class="propertyLabel sapUiSmallMarginBegin"/>
+                    <ComboBox id="_IDGenComboBox4" selectedKey="None" width="120px" class="sapUiTinyMarginBegin">
+                        <core:Item id="_IDGenItem49" key="None" text="None"/>
+                    </ComboBox>
+                </HBox>
+                
+                <!-- Time Zone -->
+                <HBox id="_IDGenHBox10" class="sapUiTinyMarginBottom">
+                    <Label id="_IDGenLabel28" text="Time zone:" class="propertyLabel"/>
+                    <ComboBox id="_IDGenComboBox5" selectedKey="UTC+0530" width="280px" class="sapUiTinyMarginBegin">
+                        <core:Item id="_IDGenItem50" key="UTC+0530" text="UTC+05:30 Chennai, Kolkata, Mumbai, New Delhi"/>
+                    </ComboBox>
+                </HBox>
+                
+                <!-- Response Options Link -->
+                <Link id="_IDGenLink3" text="Response options" class="sapUiTinyMarginBottom"/>
+                
+                <!-- Information Text -->
+                <Text id="_IDGenText1" text="External guests will receive a tailored invitation for this scheduled online meeting. They will join them a mobile or web browser and experience a virtual lobby before the appointment begins. Learn more" 
+                      class="infoText sapUiTinyMarginBottom"/>
+                
+                <ToolbarSpacer id="_IDGenToolbarSpacer4"/>
+                <ToolbarSpacer id="_IDGenToolbarSpacer5"/>
+
+                <!-- Title -->
+                <Label id="_IDGenLabel29" text="Add title" labelFor="virtualTitle" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="virtualTitle" placeholder="Add title" width="100%"/>
+                
+                <!-- External Guest -->
+                <Label id="_IDGenLabel30" text="External guest name *" labelFor="guestName" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="guestName" placeholder="Guest name" width="100%"/>
+                
+                <Label id="_IDGenLabel31" text="Email *" labelFor="guestEmail" class="subLabel"/>
+                <Input id="guestEmail" placeholder="Email address" width="100%" type="Email"/>
+                
+                <!-- Add additional guest button -->
+                <Button id="_IDGenButton8" text="Add additional external guest" icon="sap-icon://add" type="Transparent" press="onAddGuest" class="sapUiTinyMarginTop"/>
+                
+                <!-- Date and Time Section -->
+                <HBox id="_IDGenHBox11" class="sapUiSmallMarginTop">
+                    <VBox id="_IDGenVBox8" width="60%" class="sapUiSmallMarginEnd">
+                        <HBox id="_IDGenHBox12">
+                            <DatePicker id="virtualStartDate" 
+                                valueFormat="yyyy-MM-dd" 
+                                displayFormat="M/d/yyyy"
+                                width="140px"
+                                class="sapUiTinyMarginEnd"/>
+                            <TimePicker id="virtualStartTime" 
+                                valueFormat="HH:mm" 
+                                displayFormat="h:mm a"
+                                width="100px"/>
+                        </HBox>
+                        <HBox id="_IDGenHBox13" class="sapUiTinyMarginTop">
+                            <DatePicker id="virtualEndDate" 
+                                valueFormat="yyyy-MM-dd" 
+                                displayFormat="M/d/yyyy"
+                                width="140px"
+                                class="sapUiTinyMarginEnd"/>
+                            <TimePicker id="virtualEndTime" 
+                                valueFormat="HH:mm" 
+                                displayFormat="h:mm a"
+                                width="100px"/>
+                        </HBox>
+                    </VBox>
+                    
+                    <VBox id="_IDGenVBox9" width="40%" justifyContent="Center">
+                        <Text id="_IDGenText2" text="30m" class="durationText"/>
+                        <CheckBox id="virtualAllDay" text="All day" selected="false" class="sapUiTinyMarginTop"/>
+                    </VBox>
+                </HBox>
+                
+                <!-- Recurrence -->
+                <Label id="_IDGenLabel32" text="Does not repeat" labelFor="virtualRecurrence" class="sectionLabel sapUiSmallMarginTop"/>
+                <Select id="virtualRecurrence" width="100%">
+                    <core:Item id="_IDGenItem51" key="none" text="Does not repeat"/>
+                    <core:Item id="_IDGenItem52" key="daily" text="Daily"/>
+                    <core:Item id="_IDGenItem53" key="weekly" text="Weekly"/>
+                    <core:Item id="_IDGenItem54" key="monthly" text="Monthly"/>
+                    <core:Item id="_IDGenItem55" key="yearly" text="Yearly"/>
+                    <core:Item id="_IDGenItem56" key="custom" text="Custom"/>
+                </Select>
+                
+                <!-- Internal Attendees -->
+                <Label id="_IDGenLabel33" text="Add attendees within my organization" labelFor="internalAttendees" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="internalAttendees" placeholder="Add attendees" width="100%"/>
+                <Label id="_IDGenLabel34" text="Optional" class="subLabel"/>
+                
+                <!-- Location -->
+                <Label id="_IDGenLabel35" text="Add location" labelFor="virtualLocation" class="sectionLabel sapUiSmallMarginTop"/>
+                <Input id="virtualLocation" placeholder="Add location" width="100%"/>
+                
+                <!-- Options Section -->
+                <Label id="_IDGenLabel36" text="Options" class="sectionHeader sapUiSmallMarginTop"/>
+                
+                <Label id="_IDGenLabel37" text="Who can present" labelFor="presenterOptions" class="sectionLabel sapUiTinyMarginTop"/>
+                <Select id="presenterOptions" width="100%" selectedKey="organizersOnly">
+                    <core:Item id="_IDGenItem57" key="everyone" text="Everyone"/>
+                    <core:Item id="_IDGenItem58" key="organizersOnly" text="Only organizers and co-organizers"/>
+                </Select>
+                
+                <CheckBox id="recordAutomatically" text="Record and transcribe automatically" selected="false" class="sapUiTinyMarginTop"/>
+                
+                <Label id="_IDGenLabel38" text="Meeting chat" labelFor="meetingChat" class="sectionLabel sapUiTinyMarginTop"/>
+                <Select id="meetingChat" width="100%" selectedKey="inMeetingOnly">
+                    <core:Item id="_IDGenItem59" key="inMeetingOnly" text="In meeting only"/>
+                    <core:Item id="_IDGenItem60" key="enabled" text="Enabled"/>
+                    <core:Item id="_IDGenItem61" key="disabled" text="Disabled"/>
+                </Select>
+                
+                <Button id="_IDGenButton10" text="More options" type="Transparent" class="sapUiTinyMarginTop"/>
+                
+                <!-- Message Editor -->
+                <Label id="_IDGenLabel39" text="Add a message, such as a confirmation note, to the meeting invitation that will be sent to and viewed by all attendees." 
+                       class="sectionLabel sapUiSmallMarginTop"/>
+                <HBox id="_IDGenHBox14" class="sapUiTinyMarginBottom">
+                    <Button id="_IDGenButton11" icon="sap-icon://bold-text" type="Transparent" tooltip="Bold"/>
+                    <Button id="_IDGenButton12" icon="sap-icon://italic-text" type="Transparent" tooltip="Italic"/>
+                    <Button id="_IDGenButton13" icon="sap-icon://underline-text" type="Transparent" tooltip="Underline"/>
+                    <Button id="_IDGenButton14" icon="sap-icon://strikethrough" type="Transparent" tooltip="Strikethrough"/>
+                    <ToolbarSpacer id="_IDGenToolbarSpacer6"/>
+                    <Button id="_IDGenButton15" icon="sap-icon://attachment" type="Transparent" tooltip="Attach file"/>
+                    <Button id="_IDGenButton16" icon="sap-icon://microphone" type="Transparent" tooltip="Record audio"/>
+                </HBox>
+                <TextArea id="virtualMessage" rows="4" width="100%" placeholder="Type your message here..."/>
+            </VBox>
+        </content>
+        <beginButton>
+            <Button id="_IDGenButton17" text="Send" type="Emphasized" press="onSaveVirtualAppointment"/>
+        </beginButton>
+        <endButton>
+            <Button id="_IDGenButton18" text="Discard" press="onCancelVirtualAppointment"/>
+        </endButton>
+    </Dialog>
+</core:FragmentDefinition>

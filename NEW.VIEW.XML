@@ -1,3 +1,432 @@
+UPDATED CODE 2
+
+<mvc:View
+    controllerName="com.capexrevex.capexravex.controller.capexrevex"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:unified="sap.ui.unified"
+    xmlns:core="sap.ui.core"
+    xmlns:f="sap.ui.layout.form"
+    class="calendarDarkTheme">
+    <Shell id="_IDGenShell">
+        <App id="_IDGenApp">
+            <pages>
+                <Page id="_IDGenPage" title="Appointments Calendar" class="customPage darkPage">
+                    <content>
+                        <HBox id="_IDGenHBox">
+                            <!-- Calendar Content -->
+                            <VBox id="_IDGenVBox1" class="sapUiSmallMargin" width="100%">
+                                <Toolbar id="_IDGenToolbar1">
+                                    <ToolbarSpacer id="_IDGenToolbarSpacer" />
+                                    
+                                    <!-- User Role Selection -->
+                                    <Label id="_IDGenLabel13" text="Logged in as" />
+                                    <Select
+                                        id="userRole"
+                                        change="handleRoleChange"
+                                        selectedKey="admin"
+                                        width="230px">
+                                        <items>
+                                            <core:Item id="_IDGenItem22" key="admin" text="Admin" />
+                                            <core:Item id="_IDGenItem23" key="manager" text="Manager" />
+                                            <core:Item id="_IDGenItem24" key="donna" text="Donna Moore" />
+                                        </items>
+                                    </Select>
+                                    
+                                    <!-- View Selection Dropdown -->
+                                    <Button id="viewSelectButton" icon="sap-icon://calendar" text="Work week " press="onViewSelectPress" />
+                                    
+                                    <!-- Filter Dropdown -->
+                                    <Button id="_IDGenButton7" icon="sap-icon://filter" text="Filter applied" press="onFilterPress" />
+                                    
+                                    <!-- Meet Now Button -->
+                                    <Button id="meetNowButton" icon="sap-icon://video" text="Meet now" press="onMeetNowPress" type="Emphasized" />
+                                    
+                                    <!-- New Event Dropdown -->
+                                    <Button id="_IDGenButton9" icon="sap-icon://add" text="New event" press="onNewEventPress" />
+                                    
+                                    <!-- Notification Badge -->
+                                    <Button id="notificationButton" icon="sap-icon://bell" type="Transparent" press="onNotificationPress">
+                                        <layoutData>
+                                            <OverflowToolbarLayoutData id="_IDGenOverflowToolbarLayoutData" priority="NeverOverflow"/>
+                                        </layoutData>
+                                    </Button>
+                                </Toolbar>
+                                
+                                <!-- Calendar Implementation with Drag and Drop -->
+                                <PlanningCalendar
+                                    id="calendar"
+                                    startDate="{/startDate}"
+                                    viewKey="Workweek"
+                                    rows="{/people}"
+                                    appointmentsVisualization="Filled"
+                                    appointmentSelect="onAppointmentSelect"
+                                    intervalSelect="onIntervalSelect"
+                                    >
+                                    <views>
+                                        <PlanningCalendarView id="_IDGenPlanningCalendarView" key="Day" intervalType="Hour" intervalsS="12" intervalsM="12" intervalsL="12"/>
+                                        <PlanningCalendarView id="_IDGenPlanningCalendarView1" key="Week" intervalType="Day" intervalsS="7" intervalsM="7" intervalsL="7"/>
+                                        <PlanningCalendarView id="_IDGenPlanningCalendarView2" key="Workweek" intervalType="Day" intervalsS="5" intervalsM="5" intervalsL="5"/>
+                                        <PlanningCalendarView id="_IDGenPlanningCalendarView3" key="Month" intervalType="Month" intervalsS="1" intervalsM="1" intervalsL="1"/>
+                                    </views>
+                                    <rows>
+                                        <PlanningCalendarRow id="_IDGenPlanningCalendarRow"
+                                            title="{name}"
+                                            text="{role}"
+                                            icon="{pic}"
+                                            enableAppointmentsDragAndDrop="{path:'name', formatter:'.canModifyAppointments'}"
+                                            enableAppointmentsResize="{path:'name', formatter:'.canModifyAppointments'}"
+                                            enableAppointmentsCreate="{path:'name', formatter:'.canModifyAppointments'}"
+                                            appointmentDrop="handleAppointmentDrop"
+                                            appointmentDragEnter="handleAppointmentDragEnter"
+                                            appointmentResize="handleAppointmentResize"
+                                            appointmentCreate="handleAppointmentCreate"
+                                            appointments="{path: 'appointments'}">
+                                            <appointments>
+                                                <unified:CalendarAppointment id="_IDGenCalendarAppointment1"
+                                                    startDate="{start}"
+                                                    endDate="{end}"
+                                                    title="{title}"
+                                                    text="{info}"
+                                                    type="{type}"
+                                                    icon="{pic}"
+                                                    tentative="{tentative}"
+                                                    tooltip="{title}" />
+                                            </appointments>
+                                        </PlanningCalendarRow>
+                                    </rows>
+                                </PlanningCalendar>
+                                
+                                <!-- View Selection Popover -->
+                                <Popover id="viewPopover" title="Select View" placement="Bottom" class="darkPopover">
+                                    <List id="_IDGenList">
+                                        <StandardListItem id="_IDGenStandardListItem1" title="Day" type="Navigation" press="onViewSelected"/>
+                                        
+                                        <!-- Work week with submenus -->
+                                        <CustomListItem id="_IDGenWorkWeekItem">
+                                            <HBox id="_IDGenWorkWeekHBox">
+                                                <Text id="_IDGenWorkWeekText" text="Work week" class="sapUiTinyMarginTop"/>
+                                                <Button id="_IDGenWorkWeekButton" icon="sap-icon://slim-arrow-right" type="Transparent" press="onWorkWeekMenuPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <StandardListItem id="_IDGenStandardListItem3" title="Week" type="Navigation" press="onViewSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem4" title="Month" type="Navigation" press="onViewSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem5" title="Split view" type="Navigation" press="onViewSelected"/>
+                                    </List>
+                                    
+                                    <!-- Work Week Submenu - Time Scale and Days to Show -->
+                                    <VBox id="workWeekTimeScaleMenu" visible="{/workWeekMenuOpen}">
+                                        <Text id="_IDGenText7" text="Time scale" class="sapUiSmallMarginBegin sapUiTinyMarginTop"/>
+                                        <Select id="timeScaleSelect" selectedKey="30" change="onTimeScaleChange" width="100%">
+                                            <items>
+                                                <core:Item id="_IDGenItem63" key="60" text="60 minutes - Least space for details"/>
+                                                <core:Item id="_IDGenItem64" key="30" text="30 minutes"/>
+                                                <core:Item id="_IDGenItem65" key="15" text="15 minutes"/>
+                                                <core:Item id="_IDGenItem66" key="10" text="10 minutes"/>
+                                                <core:Item id="_IDGenItem67" key="6" text="6 minutes"/>
+                                                <core:Item id="_IDGenItem68" key="5" text="5 minutes - Most space for details"/>
+                                            </items>
+                                        </Select>
+                                        
+                                        <!-- Days Section with Days to Show Dropdown -->
+                                        <VBox id="daysSection" class="sapUiSmallMarginBegin sapUiTinyMarginTop">
+                                            <Text id="_IDGenText8" text="Days"/>
+                                            <Select id="daysToShowSelect" selectedKey="5" change="onDaysToShowChange" width="100%">
+                                                <items>
+                                                    <core:Item id="_IDGenItem69" key="1" text="1 day"/>
+                                                    <core:Item id="_IDGenItem70" key="2" text="2 days"/>
+                                                    <core:Item id="_IDGenItem71" key="3" text="3 days"/>
+                                                    <core:Item id="_IDGenItem72" key="4" text="4 days"/>
+                                                    <core:Item id="_IDGenItem73" key="5" text="5 days"/>
+                                                    <core:Item id="_IDGenItem74" key="6" text="6 days"/>
+                                                    <core:Item id="_IDGenItem75" key="7" text="7 days"/>
+                                                </items>
+                                            </Select>
+                                        </VBox>
+                                    </VBox>
+                                    
+                                    <footer>
+                                        <Toolbar id="_IDGenToolbar2">
+                                            <ToolbarSpacer id="_IDGenToolbarSpacer3"/>
+                                            <Button id="_IDGenButton" text="Saved views" press="onSavedViewsPress"/>
+                                        </Toolbar>
+                                    </footer>
+                                </Popover>
+                                
+                                <!-- Filter Popover -->
+                                <Popover id="filterPopover" title="Filter" placement="Bottom" class="darkPopover">
+                                    <List id="_IDGenList1">
+                                        <StandardListItem id="_IDGenStandardListItem7" title="Clear filters" type="Navigation" press="onClearFilters"/>
+                                        
+                                        <!-- Appointments -->
+                                        <CustomListItem id="_IDGenCustomListItem">
+                                            <HBox id="_IDGenHBox15">
+                                                <CheckBox id="appointmentsCheckbox" text="Appointments" selected="true" select="onFilterChange"/>
+                                                <Button id="_IDGenButton3" icon="sap-icon://slim-arrow-down" type="Transparent" press="onAppointmentsFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <!-- Meetings -->
+                                        <CustomListItem id="_IDGenCustomListItem1">
+                                            <HBox id="_IDGenHBox16">
+                                                <CheckBox id="meetingsCheckbox" text="Meetings" selected="true" select="onFilterChange"/>
+                                                <Button id="_IDGenButton19" icon="sap-icon://slim-arrow-down" type="Transparent" press="onMeetingsFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <!-- Reservations -->
+                                        <CustomListItem id="_IDGenCustomListItem2">
+                                            <HBox id="_IDGenHBox17">
+                                                <CheckBox id="reservationsCheckbox" text="Reservations" selected="false" select="onFilterChange"/>
+                                                <Button id="_IDGenButton20" icon="sap-icon://slim-arrow-down" type="Transparent" press="onReservationsFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <!-- Categories -->
+                                        <CustomListItem id="categoriesListItem">
+                                            <HBox id="_IDGenHBox18">
+                                                <Text id="_IDGenText3" text="Categories" class="sapUiTinyMarginTop"/>
+                                                <Button id="_IDGenButton21" icon="sap-icon://slim-arrow-down" type="Transparent" press="onCategoriesFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <!-- Show as -->
+                                        <CustomListItem id="showAsListItem">
+                                            <HBox id="_IDGenHBox19">
+                                                <Text id="_IDGenText4" text="Show as" class="sapUiTinyMarginTop"/>
+                                                <Button id="_IDGenButton22" icon="sap-icon://slim-arrow-down" type="Transparent" press="onShowAsFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <!-- Recurrence -->
+                                        <CustomListItem id="recurrenceListItem">
+                                            <HBox id="_IDGenHBox20">
+                                                <Text id="_IDGenText5" text="Recurrence" class="sapUiTinyMarginTop"/>
+                                                <Button id="_IDGenButton23" icon="sap-icon://slim-arrow-down" type="Transparent" press="onRecurrenceFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                        
+                                        <!-- In-person -->
+                                        <CustomListItem id="inPersonListItem">
+                                            <HBox id="_IDGenHBox21">
+                                                <Text id="_IDGenText6" text="In-person" class="sapUiTinyMarginTop"/>
+                                                <Button id="_IDGenButton24" icon="sap-icon://slim-arrow-down" type="Transparent" press="onInPersonFilterPress"/>
+                                            </HBox>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Appointments Filter Popover -->
+                                <Popover id="appointmentsFilterPopover" title="Appointments" placement="Right" class="darkPopover">
+                                    <List id="appointmentsFilterList">
+                                        <StandardListItem id="appointmentsUnselectAll" title="Unselect all" type="Active" press="onAppointmentsUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem4">
+                                            <CheckBox id="_IDGenCheckBox" text="All day" selected="true" select="onAppointmentsFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Meetings Filter Popover -->
+                                <Popover id="meetingsFilterPopover" title="Meetings" placement="Right" class="darkPopover">
+                                    <List id="meetingsFilterList">
+                                        <StandardListItem id="meetingsUnselectAll" title="Unselect all" type="Active" press="onMeetingsUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem5">
+                                            <CheckBox id="_IDGenCheckBox1" text="I'm the organizer" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem6">
+                                            <CheckBox id="_IDGenCheckBox2" text="Sent" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem7">
+                                            <CheckBox id="_IDGenCheckBox3" text="Draft" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem8">
+                                            <CheckBox id="_IDGenCheckBox4" text="I'm an attendee" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem9">
+                                            <CheckBox id="_IDGenCheckBox5" text="Accepted" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem10">
+                                            <CheckBox id="_IDGenCheckBox6" text="Declined" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem11">
+                                            <CheckBox id="_IDGenCheckBox7" text="Followed" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem12">
+                                            <CheckBox id="_IDGenCheckBox8" text="Tentative" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem13">
+                                            <CheckBox id="_IDGenCheckBox9" text="Canceled" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem14">
+                                            <CheckBox id="_IDGenCheckBox10" text="Not responded" selected="true" select="onMeetingsFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Reservations Filter Popover -->
+                                <Popover id="reservationsFilterPopover" title="Reservations" placement="Right" class="darkPopover">
+                                    <List id="reservationsFilterList">
+                                        <StandardListItem id="reservationsUnselectAll" title="Unselect all" type="Active" press="onReservationsUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem15">
+                                            <CheckBox id="_IDGenCheckBox11" text="Requested" selected="true" select="onReservationsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem16">
+                                            <CheckBox id="_IDGenCheckBox12" text="Not requested" selected="true" select="onReservationsFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Categories Filter Popover -->
+                                <Popover id="categoriesFilterPopover" title="Categories" placement="Right" class="darkPopover">
+                                    <List id="categoriesFilterList">
+                                        <StandardListItem id="categoriesUnselectAll" title="Unselect all" type="Active" press="onCategoriesUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem17">
+                                            <CheckBox id="_IDGenCheckBox13" text="Uncategorized" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem18">
+                                            <CheckBox id="_IDGenCheckBox14" text="Red category" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem19">
+                                            <CheckBox id="_IDGenCheckBox15" text="Orange category" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem20">
+                                            <CheckBox id="_IDGenCheckBox16" text="Yellow category" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem21">
+                                            <CheckBox id="_IDGenCheckBox17" text="Green category" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem22">
+                                            <CheckBox id="_IDGenCheckBox18" text="Blue category" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem23">
+                                            <CheckBox id="_IDGenCheckBox19" text="Purple category" selected="true" select="onCategoriesFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Show as Filter Popover -->
+                                <Popover id="showAsFilterPopover" title="Show as" placement="Right" class="darkPopover">
+                                    <List id="showAsFilterList">
+                                        <StandardListItem id="showAsUnselectAll" title="Unselect all" type="Active" press="onShowAsUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem24">
+                                            <CheckBox id="_IDGenCheckBox20" text="Free" selected="true" select="onShowAsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem25">
+                                            <CheckBox id="_IDGenCheckBox21" text="Working elsewhere" selected="true" select="onShowAsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem26">
+                                            <CheckBox id="_IDGenCheckBox22" text="Tentative" selected="true" select="onShowAsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem27">
+                                            <CheckBox id="_IDGenCheckBox23" text="Busy" selected="true" select="onShowAsFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem28">
+                                            <CheckBox id="_IDGenCheckBox24" text="Out of office" selected="true" select="onShowAsFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Recurrence Filter Popover -->
+                                <Popover id="recurrenceFilterPopover" title="Recurrence" placement="Right" class="darkPopover">
+                                    <List id="recurrenceFilterList">
+                                        <StandardListItem id="recurrenceUnselectAll" title="Unselect all" type="Active" press="onRecurrenceUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem29">
+                                            <CheckBox id="_IDGenCheckBox25" text="Recurring" selected="true" select="onRecurrenceFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem30">
+                                            <CheckBox id="_IDGenCheckBox26" text="Non-recurring" selected="true" select="onRecurrenceFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- In-person Filter Popover -->
+                                <Popover id="inPersonFilterPopover" title="In-person" placement="Right" class="darkPopover">
+                                    <List id="inPersonFilterList">
+                                        <StandardListItem id="inPersonUnselectAll" title="Unselect all" type="Active" press="onInPersonUnselectAll"/>
+                                        <CustomListItem id="_IDGenCustomListItem31">
+                                            <CheckBox id="_IDGenCheckBox27" text="In-person" selected="true" select="onInPersonFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem32">
+                                            <CheckBox id="_IDGenCheckBox28" text="Virtual" selected="true" select="onInPersonFilterSelect"/>
+                                        </CustomListItem>
+                                        <CustomListItem id="_IDGenCustomListItem33">
+                                            <CheckBox id="_IDGenCheckBox29" text="Hybrid" selected="true" select="onInPersonFilterSelect"/>
+                                        </CustomListItem>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- New Event Popover -->
+                                <Popover id="newEventPopover" title="New event" placement="Bottom" class="darkPopover">
+                                    <List id="_IDGenList2">
+                                        <StandardListItem id="_IDGenStandardListItem12" title="Event" type="Navigation" press="onNewEventTypeSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem13" title="Channel meeting" type="Navigation" press="onNewEventTypeSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem14" title="Organization templates" type="Navigation" press="onNewEventTypeSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem15" title="Webinar" type="Navigation" press="onNewEventTypeSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem16" title="Town hall" type="Navigation" press="onNewEventTypeSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem17" title="Virtual appointment" type="Navigation" press="onNewEventTypeSelected"/>
+                                        <StandardListItem id="_IDGenStandardListItem18" title="Live Event" type="Navigation" press="onNewEventTypeSelected"/>
+                                    </List>
+                                </Popover>
+                                
+                                <!-- Event Details Popover -->
+                                <ResponsivePopover id="eventDetailsPopover" title="Event Details" placement="Auto" class="darkPopover">
+                                    <content>
+                                        <VBox id="_IDGenVBox" class="sapUiMediumMargin">
+                                            <f:SimpleForm id="eventForm" editable="true" layout="ResponsiveGridLayout" 
+                                                title="Event Information" >
+                                                <f:content>
+                                                    <Label id="_IDGenLabel" text="Title"/>
+                                                    <Input id="eventTitle" value="{/selectedEvent/title}"/>
+                                                    
+                                                    <Label id="_IDGenLabel1" text="Start Date"/>
+                                                    <DateTimeInput id="eventStart" value="{/selectedEvent/start}" 
+                                                        valueFormat="yyyy-MM-dd HH:mm" displayFormat="yyyy-MM-dd HH:mm"/>
+                                                    
+                                                    <Label id="_IDGenLabel2" text="End Date"/>
+                                                    <DateTimeInput id="eventEnd" value="{/selectedEvent/end}" 
+                                                        valueFormat="yyyy-MM-dd HH:mm" displayFormat="yyyy-MM-dd HH:mm"/>
+                                                    
+                                                    <Label id="_IDGenLabel3" text="Description"/>
+                                                    <TextArea id="eventDescription" value="{/selectedEvent/info}" rows="3"/>
+                                                    
+                                                    <Label id="_IDGenLabel4" text="Type"/>
+                                                    <Select id="eventType" selectedKey="{/selectedEvent/type}">
+                                                        <items>
+                                                            <core:Item id="_IDGenItem2" key="Type01" text="Meeting"/>
+                                                            <core:Item id="_IDGenItem3" key="Type02" text="Personal"/>
+                                                            <core:Item id="_IDGenItem4" key="Type03" text="Business"/>
+                                                            <core:Item id="_IDGenItem5" key="Type04" text="Important"/>
+                                                            <core:Item id="_IDGenItem6" key="Type05" text="Vacation"/>
+                                                            <core:Item id="_IDGenItem7" key="Type06" text="Travel"/>
+                                                            <core:Item id="_IDGenItem13" key="Type07" text="Family"/>
+                                                            <core:Item id="_IDGenItem14" key="Type08" text="Canceled"/>
+                                                            <core:Item id="_IDGenItem15" key="Type09" text="Other"/>
+                                                        </items>
+                                                    </Select>
+                                                    
+                                                    <Label id="_IDGenLabel5" text="Attendees"/>
+                                                    <MultiInput id="eventAttendees" placeholder="Add attendees"/>
+                                                </f:content>
+                                            </f:SimpleForm>
+                                        </VBox>
+                                    </content>
+                                    <beginButton>
+                                        <Button id="_IDGenButton1" text="Save" type="Emphasized" press="onSaveEvent"/>
+                                    </beginButton>
+                                    <endButton>
+                                        <Button id="_IDGenButton2" text="Discard" press="onDiscardEvent"/>
+                                    </endButton>
+                                </ResponsivePopover>
+                            </VBox>
+                        </HBox>
+                    </content>
+                </Page>
+            </pages>
+        </App>
+    </Shell>
+</mvc:View>
+
 
 UPDATED CODE 1
 <mvc:View

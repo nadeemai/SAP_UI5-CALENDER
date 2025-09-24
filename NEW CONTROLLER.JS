@@ -1,3 +1,2855 @@
+UPDATED CODE 13
+
+sap.ui.define([
+    "sap/ui/core/mvc/Controller",
+    "sap/ui/model/json/JSONModel",
+    "sap/m/MessageToast",
+    "sap/ui/core/date/UI5Date",
+    "sap/ui/core/Fragment",
+    "sap/ui/model/Filter",
+    "sap/ui/model/FilterOperator",
+    "sap/m/Token",
+    "sap/ui/model/odata/v2/ODataModel",
+    "sap/m/Dialog",
+    "sap/m/Input",
+    "sap/m/Button",
+    "sap/m/Text",
+    "sap/m/SuggestionItem",
+    "sap/m/BusyIndicator",
+    "sap/ui/layout/HorizontalLayout",
+    "sap/ui/layout/VerticalLayout",
+    "sap/m/Label",
+    "sap/m/DatePicker",
+    "sap/m/TimePicker",
+    "sap/m/CheckBox",
+    "sap/m/MultiInput",
+    "sap/m/Select",
+    "sap/m/TextArea",
+    "sap/ui/unified/Calendar"
+], function (Controller, JSONModel, MessageToast, UI5Date, Fragment, Filter, FilterOperator, Token, ODataModel, Dialog, Input, Button, Text, SuggestionItem, BusyIndicator, HorizontalLayout, VerticalLayout, Label, DatePicker, TimePicker, CheckBox, MultiInput, Select, TextArea, UnifiedCalendar) {
+    "use strict";
+    return Controller.extend("com.capexrevex.capexrevex.controller.View1", {
+        onInit: function () {
+            // Initialize OData model
+            var oSchedulingModel = new ODataModel({
+                serviceUrl: "/calanderservicev2/",
+                synchronizationMode: "None",
+                useBatch: false
+            });
+
+            // Add error handling
+            oSchedulingModel.attachRequestFailed(function (oEvent) {
+                var oParams = oEvent.getParameters();
+                console.error("OData request failed:", oParams);
+            });
+
+            // Add metadata loaded handler
+            oSchedulingModel.attachMetadataLoaded(function () {
+                console.log("Scheduling service metadata loaded successfully");
+            });
+
+            // Add metadata error handling
+            oSchedulingModel.attachMetadataFailed(function (oEvent) {
+                var oParams = oEvent.getParameters();
+                MessageToast.show("Error connecting to scheduling service");
+            });
+
+            // Add request failed handler
+            oSchedulingModel.attachRequestFailed(function (oEvent) {
+                var oParams = oEvent.getParameters();
+                console.error("OData request failed:", oParams);
+                MessageToast.show("Service request failed: " + (oParams.message || "Unknown error"));
+            });
+
+            this.getView().setModel(oSchedulingModel, "scheduling");
+
+            // Initialize attendees model with value property
+            var oAttendeesModel = new JSONModel({
+                value: [
+                    { name: "Portal Admin", email: "donotreply@risedx.com", status: "Free" },
+                    { name: "Pushpak Jha", email: "pushpak.jha@risedx.com", status: "Busy" }
+                ] // This will hold the attendees array
+            });
+            this.getView().setModel(oAttendeesModel, "attendees");
+
+            // Set initial view to Work week
+            this.byId("viewSelectButton").setText("Work week");
+
+            // Set initial time scale and days to show
+            this._updateTimeScale(30);
+            this._updateWorkWeekView(5);
+
+            // Get today's date
+            var today = UI5Date.getInstance();
+
+            // Set the calendar to start from today
+            var startDate = UI5Date.getInstance(
+                today.getFullYear(),
+                today.getMonth(),
+                today.getDate(),
+                8, 0 // Start at 8 AM
+            );
+
+            // Initialize the view model with data
+            var oViewModel = new JSONModel({
+                startDate: startDate,
+                people: [{}],
+                selectedEvent: {
+                    title: "",
+                    start: UI5Date.getInstance(),
+                    end: UI5Date.getInstance(),
+                    info: "",
+                    type: "Type01",
+                    isNew: true // Flag to identify new appointments
+                },
+                attendeeStatus: {
+                    eventwAttendeesStatus: "",
+                    requiredAttendeesStatus: "",
+                    optionalAttendeesStatus: "",
+                    internalAttendeesStatus: ""
+                },
+                busy: {
+                    checkingAvailability: false
+                },
+                filters: {
+                    appointments: true,
+                    meetings: true,
+                    reservations: false,
+                    categories: [],
+                    showAs: [],
+                    recurrence: [],
+                    inPerson: [],
+                    organizer: {
+                        sent: true,
+                        draft: true
+                    },
+                    attendee: {
+                        accepted: true,
+                        declined: true,
+                        followed: true,
+                        tentative: true,
+                        canceled: true,
+                        notResponded: true
+                    }
+                },
+                currentView: "Work week",
+                timeScale: "30 minutes",
+                daysToShow: 5,
+                workWeekMenuOpen: false,
+                timeScaleMinutes: 30,
+                groupMode: "Group",
+                currentTime: UI5Date.getInstance()
+            });
+
+            // Create additional model with extended data using UI5Date
+            var oModel = new JSONModel();
+            oModel.setData({
+                startDate: startDate,
+                people: [
+                    { appointments: [] },
+                    { appointments: [] },
+                    { appointments: [] },
+                    { appointments: [] }
+                ]
+            });
+
+            // Set both models to the view
+            this.getView().setModel(oViewModel, "view");
+            this.getView().setModel(oModel);
+
+            // Initialize filter arrays
+            this._aFilters = [];
+
+            // Update date display in filter popover
+            this._updateDateDisplay();
+
+            // Load attendees data
+            this._loadAttendees();
+
+            // Set up interval to update current time display every minute
+            this._currentTimeInterval = setInterval(this._updateCurrentTime.bind(this), 60000);
+
+            // Initial update of current time
+            this._updateCurrentTime();
+        },
+
+        // Update current time in the model
+        _updateCurrentTime: function () {
+            var oNow = UI5Date.getInstance();
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/currentTime", oNow);
+        },
+
+        // Load attendees from scheduling service
+        _loadAttendees: function () {
+            var oSchedulingModel = this.getView().getModel("scheduling");
+            var oAttendeesModel = this.getView().getModel("attendees");
+            var that = this;
+
+            // Read attendees from OData service
+            oSchedulingModel.read("/getAttendees", {
+                success: function (oData) {
+                    if (oData && oData.value) {
+                        // Transform the data to match our expected structure
+                        var aAttendees = oData.value.map(function (oAttendee) {
+                            return {
+                                name: oAttendee.Name || oAttendee.name || "",
+                                email: oAttendee.Email || oAttendee.email || "",
+                                status: oAttendee.Status || oAttendee.status || "Free"
+                            };
+                        });
+
+                        // Store in attendees model using /value property
+                        oAttendeesModel.setProperty("/value", aAttendees);
+                        MessageToast.show("Attendees loaded successfully: " + aAttendees.length + " found");
+                    } else {
+                        MessageToast.show("No attendees found");
+                        oAttendeesModel.setProperty("/value", []);
+                    }
+                },
+                error: function (oError) {
+                    console.error("Error loading attendees:", oError);
+                    MessageToast.show("Error loading attendees from service");
+                    // Fallback to empty array if service fails
+                    oAttendeesModel.setProperty("/value", []);
+                }
+            });
+        },
+
+        // Create a new attendee via OData service
+        _createAttendee: function (oNewAttendee) {
+            var oSchedulingModel = this.getView().getModel("scheduling");
+            var oAttendeesModel = this.getView().getModel("attendees");
+            var that = this;
+
+            // Create the attendee via OData service
+            oSchedulingModel.create("/getAttendees", oNewAttendee, {
+                success: function (oData, oResponse) {
+                    // Refresh the attendees list from backend
+                    that._loadAttendees();
+                    // Also update local model immediately so UI updates
+                    var aAttendees = oAttendeesModel.getProperty("/value") || [];
+                    aAttendees.push({
+                        name: oNewAttendee.Name || oNewAttendee.name || "",
+                        email: oNewAttendee.Email || oNewAttendee.email || "",
+                        status: oNewAttendee.Status || oNewAttendee.status || "Free"
+                    });
+                    oAttendeesModel.setProperty("/value", aAttendees);
+                    MessageToast.show("Attendee created successfully");
+                },
+                error: function (oError) {
+                    console.error("Error creating attendee:", oError);
+                    MessageToast.show("Error creating attendee");
+                }
+            });
+        },
+
+        // Handle attendee suggestions in MultiInput
+        onAttendeeSuggest: function (oEvent) {
+            var sTerm = oEvent.getParameter("suggestValue");
+            var oMultiInput = oEvent.getSource();
+            var oAttendeesModel = this.getView().getModel("attendees");
+
+            if (!oAttendeesModel) {
+                return;
+            }
+
+            // Get attendees from the model's value property
+            var aAttendees = oAttendeesModel.getProperty("/value") || [];
+            var aFilteredAttendees = [];
+
+            if (sTerm) {
+                // Filter attendees based on search term
+                aFilteredAttendees = aAttendees.filter(function (oAttendee) {
+                    return oAttendee.name.toLowerCase().includes(sTerm.toLowerCase()) ||
+                        oAttendee.email.toLowerCase().includes(sTerm.toLowerCase());
+                });
+            } else {
+                aFilteredAttendees = aAttendees;
+            }
+
+            // Update suggestion items
+            oMultiInput.destroySuggestionItems();
+
+            aFilteredAttendees.forEach(function (oAttendee) {
+                var oSuggestionItem = new SuggestionItem({
+                    key: oAttendee.email,
+                    text: oAttendee.name + " (" + oAttendee.email + ")",
+                    description: oAttendee.status
+                });
+
+                // Set different icons based on status
+                switch (oAttendee.status.toLowerCase()) {
+                    case "free":
+                        oSuggestionItem.setIcon("sap-icon://accept");
+                        break;
+                    case "busy":
+                        oSuggestionItem.setIcon("sap-icon://busy");
+                        break;
+                    case "tentative":
+                        oSuggestionItem.setIcon("sap-icon://question-mark");
+                        break;
+                    default:
+                        oSuggestionItem.setIcon("sap-icon://employee");
+                }
+
+                oMultiInput.addSuggestionItem(oSuggestionItem);
+            });
+        },
+
+        // Handle token addition in MultiInput with OData call
+        onAttendeeTokenChange: function (oEvent) {
+            var oMultiInput = oEvent.getSource();
+            var sInputValue = oMultiInput.getValue().trim();
+            var sId = oMultiInput.getId();
+
+            if (!sInputValue) {
+                // Call checkAvailability with default email when input is empty
+                var oModel = this.getView().getModel("scheduling");
+                var sPath = "/checkAvailability(attendeeEmail='" + encodeURIComponent("donotreply@risedx.com") + "')";
+                oModel.read(sPath, {
+                    success: function (oData) {
+                        var sStatus = oData.status || "Unknown";
+                        // Update the status in the view model for ObjectStatus display
+                        var oViewModel = this.getView().getModel("view");
+                        oViewModel.setProperty("/attendeeStatus/_IDGenObjectStatus", sStatus);
+                    }.bind(this),
+                    error: function (oError) {
+                        console.error("Error checking availability:", oError);
+                        sap.m.MessageToast.show("Failed to check availability");
+                        var oViewModel = this.getView().getModel("view");
+                        oViewModel.setProperty("/attendeeStatus/_IDGenObjectStatus", "Error");
+                    }
+                });
+                return;
+            }
+
+            // Determine which status property to update based on MultiInput ID
+            var sStatusProperty = this._getStatusPropertyFromId(sId);
+
+            // Check if input is an email
+            if (this._isEmailValid(sInputValue)) {
+                var oAttendeesModel = this.getView().getModel("attendees");
+                var aAttendees = oAttendeesModel.getProperty("/value") || [];
+                var bExists = aAttendees.some(function (oAttendee) {
+                    return oAttendee.email === sInputValue;
+                });
+
+                if (!bExists) {
+                    // Create a new attendee
+                    var oNewAttendee = {
+                        name: sInputValue.split('@')[0],
+                        email: sInputValue,
+                        status: "Free"
+                    };
+
+                    // Create the attendee via OData
+                    this._createAttendee(oNewAttendee);
+                }
+
+                // Check availability for this attendee using OData service
+                this._checkAttendeeAvailability(sInputValue, function (sStatus) {
+                    // Create token for the email with status
+                    var oToken = new Token({
+                        key: sInputValue,
+                        text: sInputValue.split('@')[0] + " (" + sInputValue + ")",
+                        tooltip: "Status: " + sStatus
+                    });
+
+                    // Set token color based on status
+                    switch (sStatus.toLowerCase()) {
+                        case "free":
+                            oToken.setType("Success");
+                            break;
+                        case "busy":
+                            oToken.setType("Error");
+                            break;
+                        case "tentative":
+                            oToken.setType("Warning");
+                            break;
+                        default:
+                            oToken.setType("Information");
+                    }
+
+                    oMultiInput.addToken(oToken);
+                    oMultiInput.setValue("");
+
+                    // Update the status in the view model
+                    var oViewModel = this.getView().getModel("view");
+                    oViewModel.setProperty(sStatusProperty, sStatus);
+
+                }.bind(this));
+
+            } else {
+                // Trigger suggestion for non-email input
+                this.onAttendeeSuggest(oEvent);
+            }
+        },
+
+        // Handle attendee input change to show busy indicator
+        onAttendeeInputChange: function (oEvent) {
+            var oMultiInput = oEvent.getSource();
+            var sInputValue = oMultiInput.getValue().trim();
+
+            if (sInputValue) {
+                // Show busy indicator
+                this._showAttendeeBusyIndicator(true);
+
+                // Simulate a delay for checking availability
+                setTimeout(function () {
+                    // Hide busy indicator
+                    this._showAttendeeBusyIndicator(false);
+
+                    // Trigger token change if valid email
+                    if (this._isEmailValid(sInputValue)) {
+                        this.onAttendeeTokenChange(oEvent);
+                    }
+                }.bind(this), 1000);
+            }
+        },
+
+        // Show or hide the busy indicator for attendee availability check
+        _showAttendeeBusyIndicator: function (bShow) {
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/busy/checkingAvailability", bShow);
+
+            // Find the busy indicator in the fragment and show/hide it
+            var oBusyIndicator = Fragment.byId(this.getView().getId(), "attendeeBusyIndicator");
+            if (oBusyIndicator) {
+                if (bShow) {
+                    oBusyIndicator.setVisible(true);
+                } else {
+                    oBusyIndicator.setVisible(false);
+                }
+            }
+        },
+
+        // Helper method to get status property from MultiInput ID
+        _getStatusPropertyFromId: function (sId) {
+            if (sId.indexOf("requiredAttendees") !== -1) {
+                return "/attendeeStatus/requiredAttendeesStatus";
+            } else if (sId.indexOf("optionalAttendees") !== -1) {
+                return "/attendeeStatus/optionalAttendeesStatus";
+            } else if (sId.indexOf("internalAttendees") !== -1) {
+                return "/attendeeStatus/internalAttendeesStatus";
+            } else {
+                return "/attendeeStatus/eventwAttendeesStatus";
+            }
+        },
+
+        // Check attendee availability using OData service
+        _checkAttendeeAvailability: function (sEmail, fnCallback) {
+            var oSchedulingModel = this.getView().getModel("scheduling");
+            var oViewModel = this.getView().getModel("view");
+
+            // Get current meeting time from the view model
+            var oStartDateTime = oViewModel.getProperty("/selectedEvent/start");
+            var oEndDateTime = oViewModel.getProperty("/selectedEvent/end");
+
+            // Format dates for OData call
+            var sStartDateTime = oStartDateTime ? oStartDateTime.toISOString() : new Date().toISOString();
+            var sEndDateTime = oEndDateTime ? oEndDateTime.toISOString() : new Date(Date.now() + 30 * 60000).toISOString();
+
+            // Build the OData call URL
+            var sPath = "/checkAvailability(attendeeEmail='" + encodeURIComponent(sEmail) +
+                "',startDateTime='" + encodeURIComponent(sStartDateTime) +
+                "',endDateTime='" + encodeURIComponent(sEndDateTime) + "')";
+
+            // Call the checkAvailability endpoint
+            oSchedulingModel.read(sPath, {
+                success: function (oData) {
+                    var sStatus = oData.status || "Unknown";
+                    fnCallback(sStatus);
+                },
+                error: function (oError) {
+                    console.error("Error checking availability:", oError);
+                    // Fallback: check if attendee exists and get their status
+                    var oAttendeesModel = this.getView().getModel("attendees");
+                    var aAttendees = oAttendeesModel.getProperty("/value") || [];
+                    var oAttendee = aAttendees.find(function (attendee) {
+                        return attendee.email === sEmail;
+                    });
+                    var sStatus = oAttendee ? oAttendee.status : "Unknown";
+                    fnCallback(sStatus);
+                }.bind(this)
+            });
+        },
+
+        // Validate email format
+        _isEmailValid: function (sEmail) {
+            var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(sEmail);
+        },
+
+        // Handle date/time changes that affect availability
+        onDateTimeChange: function (oEvent) {
+            var oViewModel = this.getView().getModel("view");
+            var oSelectedEvent = oViewModel.getProperty("/selectedEvent");
+
+            // Get all MultiInput controls and re-check availability
+            var aMultiInputIds = ["eventwAttendees", "requiredAttendees", "optionalAttendees", "internalAttendees"];
+            var that = this;
+
+            aMultiInputIds.forEach(function (sInputId) {
+                var oMultiInput = Fragment.byId(that.getView().getId(), sInputId);
+                if (!oMultiInput) return;
+
+                var aTokens = oMultiInput.getTokens();
+                if (aTokens.length === 0) return;
+
+                // Re-check availability for all attendees when date/time changes
+                aTokens.forEach(function (oToken) {
+                    var sEmail = oToken.getKey();
+                    var sStatusProperty = that._getStatusPropertyFromId(sInputId);
+
+                    that._checkAttendeeAvailability(sEmail, function (sStatus) {
+                        // Update token appearance based on new status
+                        switch (sStatus.toLowerCase()) {
+                            case "free":
+                                oToken.setType("Success");
+                                break;
+                            case "busy":
+                                oToken.setType("Error");
+                                break;
+                            case "tentative":
+                                oToken.setType("Warning");
+                                break;
+                            default:
+                                oToken.setType("Information");
+                        }
+
+                        oToken.setTooltip("Status: " + sStatus);
+
+                        // Update the status in the view model
+                        oViewModel.setProperty(sStatusProperty, sStatus);
+                    });
+                });
+            });
+        },
+
+        // Handle status pressed to show details
+        handleStatusPressed: function (oEvent) {
+            var oObjectStatus = oEvent.getSource();
+            var sStatus = oObjectStatus.getText();
+            var sTitle = "Attendee Status Details";
+
+            // Create a dialog to show status details
+            var oDialog = new Dialog({
+                title: sTitle,
+                type: "Message",
+                state: "Information",
+                content: new Text({
+                    text: "Current status: " + sStatus + "\n\n" +
+                        "This status indicates the attendee's availability during the scheduled meeting time."
+                }),
+                beginButton: new Button({
+                    text: "OK",
+                    press: function () {
+                        oDialog.close();
+                    }
+                }),
+                afterClose: function () {
+                    oDialog.destroy();
+                }
+            });
+
+            // Open the dialog
+            oDialog.open();
+        },
+
+        // Formatter for attendee status
+        formatAttendeeStatus: function (sStatus) {
+            switch (sStatus) {
+                case "Free":
+                    return "Success";
+                case "Busy":
+                    return "Error";
+                case "Tentative":
+                    return "Warning";
+                default:
+                    return "None";
+            }
+        },
+
+        // // Open the New Appointment dialog
+        onNewAppointmentPress: function () {
+            this._openNewAppointmentDialog();
+        },
+
+        _openNewAppointmentDialog: function () {
+            if (!this._oNewAppointmentDialog) {
+                // Load NewAppointmentDialog (must match file path & name exactly)
+                this._oNewAppointmentDialog = new sap.ui.xmlfragment(
+                    this.getView().getId(), // always pass view id for scoping
+                    "com.capexrevex.capexrevex.view.Fragments.NewAppointmentDialog", // no .fragment.xml here
+                    this
+                );
+                this.getView().addDependent(this._oNewAppointmentDialog);
+
+                // Set default values for new appointment
+                this._setDefaultAppointmentValues();
+
+                // Set the models for the fragment
+                this._oNewAppointmentDialog.setModel(this.getView().getModel("view"), "view");
+                this._oNewAppointmentDialog.setModel(this.getView().getModel("attendees"), "attendees");
+
+                this._oNewAppointmentDialog.open();
+            } else {
+                // Set default values for the appointment
+                this._setDefaultAppointmentValues();
+
+                // Set the models for the fragment
+                this._oNewAppointmentDialog.setModel(this.getView().getModel("view"), "view");
+                this._oNewAppointmentDialog.setModel(this.getView().getModel("attendees"), "attendees");
+
+                this._oNewAppointmentDialog.open();
+            }
+        },
+
+        _setDefaultAppointmentValues: function () {
+            // Set default date and time to current time
+            var oNow = UI5Date.getInstance();
+            var oStart = UI5Date.getInstance(oNow);
+
+            // Round to nearest 15 minutes
+            var minutes = oStart.getMinutes();
+            if (minutes < 7.5) {
+                oStart.setMinutes(0);
+            } else if (minutes < 22.5) {
+                oStart.setMinutes(15);
+            } else if (minutes < 37.5) {
+                oStart.setMinutes(30);
+            } else if (minutes < 52.5) {
+                oStart.setMinutes(45);
+            } else {
+                oStart.setHours(oStart.getHours() + 1);
+                oStart.setMinutes(0);
+            }
+
+            var oEnd = UI5Date.getInstance(oStart);
+            oEnd.setMinutes(oEnd.getMinutes() + 30);
+
+            // Set values in the view model
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedEvent", {
+                title: "",
+                start: oStart,
+                end: oEnd,
+                location: "",
+                description: "",
+                allDay: false,
+                isNew: true
+            });
+
+            // Reset status
+            oViewModel.setProperty("/attendeeStatus/eventwAttendeesStatus", "");
+        },
+
+        // Save the new appointment with OData service integration
+        onSaveNewAppointment: function () {
+            try {
+                var oViewModel = this.getView().getModel("view");
+                var oSelectedEvent = oViewModel.getProperty("/selectedEvent");
+
+                // Get values from the dialog
+                var sTitle = Fragment.byId(this.getView().getId(), "appointmentTitle").getValue();
+                var oAttendeesInput = Fragment.byId(this.getView().getId(), "eventwAttendees");
+                var aTokens = oAttendeesInput.getTokens();
+                var sAttendees = aTokens.map(function (oToken) {
+                    return oToken.getKey();
+                }).join("; ");
+
+                // Validate required fields
+                if (!sTitle) {
+                    MessageToast.show("Please enter a title for the appointment");
+                    return;
+                }
+
+                // Validate that end time is after start time
+                if (oSelectedEvent.end <= oSelectedEvent.start) {
+                    MessageToast.show("End time must be after start time");
+                    return;
+                }
+
+                // Prepare data for OData service
+                var oMeetingData = {
+                    MeetingTitle: sTitle,
+                    StartDateTime: oSelectedEvent.start.toISOString(),
+                    EndDateTime: oSelectedEvent.end.toISOString(),
+                    Location: oSelectedEvent.location || "",
+                    Description: oSelectedEvent.description || "",
+                    IsAllDay: oSelectedEvent.allDay || false,
+                    IsRecurring: false,
+                    IsVirtual: false,
+                    Attendees: sAttendees,
+                    OrganizerEmail: "pushpak.jha@risedx.com",
+                    Category: "Appointment"
+                };
+
+                // Call OData service to create meeting
+                this.createMeetingScheduling(oMeetingData);
+
+            } catch (error) {
+                console.error("Error saving appointment:", error);
+                MessageToast.show("Error creating appointment. Please try again.");
+            }
+        },
+
+        // Create meeting scheduling via OData service
+        createMeetingScheduling: function (oMeetingData) {
+            var oSchedulingModel = this.getView().getModel("scheduling");
+            var that = this;
+
+            // Prepare the payload according to your service metadata
+            var oPayload = {
+                MeetingTitle: oMeetingData.MeetingTitle,
+                StartDateTime: oMeetingData.StartDateTime,
+                EndDateTime: oMeetingData.EndDateTime,
+                Location: oMeetingData.Location || "",
+                Description: oMeetingData.Description || "",
+                IsAllDay: oMeetingData.IsAllDay || false,
+                IsRecurring: oMeetingData.IsRecurring || false,
+                IsVirtual: oMeetingData.IsVirtual || false,
+                Attendees: oMeetingData.Attendees || "",
+                OrganizerEmail: oMeetingData.OrganizerEmail || "pushpak.jha@risedx.com",
+                Category: oMeetingData.Category || "Meeting"
+            };
+
+            oSchedulingModel.create("/MeetingScheduling", oPayload, {
+                success: function (oData, oResponse) {
+                    MessageToast.show("Meeting scheduled successfully!");
+
+                    // Add the meeting to the local calendar for immediate UI update
+                    that._addMeetingToCalendar(oMeetingData);
+
+                    // Close the dialog
+                    if (that._oNewAppointmentDialog) {
+                        that._oNewAppointmentDialog.close();
+                    }
+
+                    // Refresh attendees if needed
+                    that._loadAttendees();
+                },
+                error: function (oError) {
+                    console.error("Error scheduling meeting:", oError);
+
+                    // Fallback: Add to local calendar even if service call fails
+                    that._addMeetingToCalendar(oMeetingData);
+
+                    // Close the dialog
+                    if (that._oNewAppointmentDialog) {
+                        that._oNewAppointmentDialog.close();
+                    }
+
+                    MessageToast.show("Meeting saved locally (service unavailable)");
+                }
+            });
+        },
+
+        // Helper method to add meeting to calendar
+        _addMeetingToCalendar: function (oMeetingData) {
+            var oModel = this.getView().getModel();
+            var aPeople = oModel.getProperty("/people");
+
+            if (aPeople && aPeople.length > 0) {
+                var newAppointment = {
+                    start: new Date(oMeetingData.StartDateTime),
+                    end: new Date(oMeetingData.EndDateTime),
+                    title: oMeetingData.MeetingTitle,
+                    info: oMeetingData.Location || "Online Meeting",
+                    type: "Type01",
+                    pic: "sap-icon://group",
+                    category: oMeetingData.Category || "Meeting",
+                    showAs: "Busy",
+                    recurrence: oMeetingData.IsRecurring ? "Recurring" : "Non-recurring",
+                    inPerson: oMeetingData.IsVirtual ? "Virtual" : "In-person",
+                    organizerStatus: "sent",
+                    attendeeStatus: "accepted",
+                    attendees: oMeetingData.Attendees || [],
+                    description: oMeetingData.Description || ""
+                };
+
+                // Add to the first person's appointments
+                aPeople[0].appointments.push(newAppointment);
+                oModel.setProperty("/people", aPeople);
+
+                // Refresh calendar to show the new appointment
+                this.byId("calendar").getBinding("rows").refresh(true);
+
+                // Also refresh the entire model to ensure UI updates
+                oModel.refresh(true);
+            }
+        },
+
+
+        // Discard the new appointment
+        onDiscardNewAppointment: function () {
+            // Close the dialog without saving
+            if (this._oNewAppointmentDialog) {
+                this._oNewAppointmentDialog.close();
+            }
+            MessageToast.show("Appointment creation cancelled");
+        },
+
+        // Update date display in filter popover
+        _updateDateDisplay: function () {
+            var oDateDisplay = this.byId("dateDisplay");
+            if (oDateDisplay) {
+                var today = UI5Date.getInstance();
+                var options = { weekday: 'long', day: 'numeric' };
+                var dateText = today.toLocaleDateString('en-US', options);
+                oDateDisplay.setText(dateText);
+            }
+        },
+
+        // Clean up on exit
+        onExit: function () {
+            // Clean up all fragments when the controller is destroyed
+            if (this._oNewAppointmentDialog) {
+                this._oNewAppointmentDialog.destroy();
+                this._oNewAppointmentDialog = null;
+            }
+            if (this._oChannelMeetingDialog) {
+                this._oChannelMeetingDialog.destroy();
+                this._oChannelMeetingDialog = null;
+            }
+            if (this._oVirtualAppointmentDialog) {
+                this._oVirtualAppointmentDialog.destroy();
+                this._oVirtualAppointmentDialog = null;
+            }
+            if (this._oRemarksDialog) {
+                this._oRemarksDialog.destroy();
+                this._oRemarksDialog = null;
+            }
+            if (this._oEventDetailsPopover) {
+                this._oEventDetailsPopover.destroy();
+                this._oEventDetailsPopover = null;
+            }
+            if (this._oMeetNowDialog) {
+                this._oMeetNowDialog.destroy();
+                this._oMeetNowDialog = null;
+            }
+
+            // Clear the interval for updating current time
+            if (this._currentTimeInterval) {
+                clearInterval(this._currentTimeInterval);
+            }
+        },
+
+        // Role-based functionality
+        roles: {
+            donna: "Donna Moore",
+            manager: "manager",
+            admin: "admin"
+        },
+
+        handleRoleChange: function () {
+            this.getView().getModel().refresh(true);
+        },
+
+        getUserRole: function () {
+            return this.roles[this.byId("userRole").getSelectedKey()];
+        },
+
+        canModifyAppointments: function (sRole) {
+            var sUserRole = this.getUserRole();
+            if (sUserRole === this.roles.manager || sUserRole === this.roles.admin || sUserRole === sRole) {
+                return true;
+            }
+            return false;
+        },
+
+        // Filter functionality
+        onFilterChange: function (oEvent) {
+            var sFilterType = oEvent.getSource().getId().replace("Checkbox", "");
+            var bSelected = oEvent.getParameter("selected");
+            // Update filter model
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+            oFilters[sFilterType.toLowerCase()] = bSelected;
+            oViewModel.setProperty("/filters", oFilters);
+            // Apply filters
+            this.applyFilters();
+        },
+
+        // Update the applyFilters method to work correctly
+        applyFilters: function () {
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+            // Clear existing filters
+            this._aFilters = [];
+
+            // Apply category type filters
+            var aCategoryFilters = [];
+            if (oFilters.appointments) {
+                aCategoryFilters.push(new Filter("category", FilterOperator.EQ, "Appointment"));
+            }
+            if (oFilters.meetings) {
+                aCategoryFilters.push(new Filter("category", FilterOperator.EQ, "Meeting"));
+            }
+            if (oFilters.reservations) {
+                aCategoryFilters.push(new Filter("category", FilterOperator.EQ, "Reservation"));
+            }
+            if (aCategoryFilters.length > 0) {
+                this._aFilters.push(new Filter({
+                    filters: aCategoryFilters,
+                    and: false
+                }));
+            }
+
+            // Apply additional filters if any are selected
+            if (oFilters.categories && oFilters.categories.length > 0) {
+                this._aFilters.push(new Filter("category", FilterOperator.Contains, oFilters.categories.join("|")));
+            }
+            if (oFilters.showAs && oFilters.showAs.length > 0) {
+                this._aFilters.push(new Filter("showAs", FilterOperator.Contains, oFilters.showAs.join("|")));
+            }
+            if (oFilters.recurrence && oFilters.recurrence.length > 0) {
+                this._aFilters.push(new Filter("recurrence", FilterOperator.Contains, oFilters.recurrence.join("|")));
+            }
+            if (oFilters.inPerson && oFilters.inPerson.length > 0) {
+                this._aFilters.push(new Filter("inPerson", FilterOperator.Contains, oFilters.inPerson.join("|")));
+            }
+
+            // Apply organizer filters
+            var aOrganizerFilters = [];
+            if (oFilters.organizer.sent) {
+                aOrganizerFilters.push(new Filter("organizerStatus", FilterOperator.EQ, "sent"));
+            }
+            if (oFilters.organizer.draft) {
+                aOrganizerFilters.push(new Filter("organizerStatus", FilterOperator.EQ, "draft"));
+            }
+            if (aOrganizerFilters.length > 0) {
+                this._aFilters.push(new Filter({
+                    filters: aOrganizerFilters,
+                    and: false
+                }));
+            }
+
+            // Apply attendee filters
+            var aAttendeeFilters = [];
+            if (oFilters.attendee.accepted) {
+                aAttendeeFilters.push(new Filter("attendeeStatus", FilterOperator.EQ, "accepted"));
+            }
+            if (oFilters.attendee.declined) {
+                aAttendeeFilters.push(new Filter("attendeeStatus", FilterOperator.EQ, "declined"));
+            }
+            if (oFilters.attendee.followed) {
+                aAttendeeFilters.push(new Filter("attendeeStatus", FilterOperator.EQ, "followed"));
+            }
+            if (oFilters.attendee.tentative) {
+                aAttendeeFilters.push(new Filter("attendeeStatus", FilterOperator.EQ, "tentative"));
+            }
+            if (oFilters.attendee.canceled) {
+                aAttendeeFilters.push(new Filter("attendeeStatus", FilterOperator.EQ, "canceled"));
+            }
+            if (oFilters.attendee.notResponded) {
+                aAttendeeFilters.push(new Filter("attendeeStatus", FilterOperator.EQ, "notResponded"));
+            }
+            if (aAttendeeFilters.length > 0) {
+                this._aFilters.push(new Filter({
+                    filters: aAttendeeFilters,
+                    and: false
+                }));
+            }
+
+            // Apply filters to the calendar
+            var oCalendar = this.byId("calendar");
+            var oBinding = oCalendar.getBinding("rows");
+            if (this._aFilters.length > 0) {
+                oBinding.filter(this._aFilters);
+            } else {
+                oBinding.filter([]);
+            }
+
+            // Update filter button text
+            var oFilterButton = this.byId("_IDGenButton7");
+            var iFilterCount = this._aFilters.length;
+            oFilterButton.setText(iFilterCount > 0 ? "Filter (" + iFilterCount + ")" : "Filter");
+        },
+
+        // Filter popover handlers
+        onAppointmentsFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("appointmentsFilterPopover").openBy(oButton);
+        },
+
+        onMeetingsFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("meetingsFilterPopover").openBy(oButton);
+        },
+
+        onReservationsFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("reservationsFilterPopover").openBy(oButton);
+        },
+
+        onCategoriesFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("categoriesFilterPopover").openBy(oButton);
+        },
+
+        onShowAsFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("showAsFilterPopover").openBy(oButton);
+        },
+
+        onRecurrenceFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("recurrenceFilterPopover").openBy(oButton);
+        },
+
+        onInPersonFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            this.byId("inPersonFilterPopover").openBy(oButton);
+        },
+
+        // Organizer and Attendee filter handlers
+        onOrganizerFilterPress: function (oEvent) {
+            var oOptionsBox = this.byId("organizerOptions");
+            oOptionsBox.setVisible(!oOptionsBox.getVisible());
+        },
+
+        onAttendeeFilterPress: function (oEvent) {
+            var oOptionsBox = this.byId("attendeeOptions");
+            oOptionsBox.setVisible(!oOptionsBox.getVisible());
+        },
+
+        onOrganizerFilterChange: function (oEvent) {
+            var sId = oEvent.getSource().getId();
+            var bSelected = oEvent.getParameter("selected");
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+            // Update the corresponding filter property
+            if (sId === "sentCheckbox") {
+                oFilters.organizer.sent = bSelected;
+            } else if (sId === "draftCheckbox") {
+                oFilters.organizer.draft = bSelected;
+            }
+            oViewModel.setProperty("/filters", oFilters);
+            this.applyFilters();
+        },
+
+        onAttendeeFilterChange: function (oEvent) {
+            var sId = oEvent.getSource().getId();
+            var bSelected = oEvent.getParameter("selected");
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+            // Update the corresponding filter property
+            if (sId === "acceptedCheckbox") {
+                oFilters.attendee.accepted = bSelected;
+            } else if (sId === "declinedCheckbox") {
+                oFilters.attendee.declined = bSelected;
+            } else if (sId === "followedCheckbox") {
+                oFilters.attendee.followed = bSelected;
+            } else if (sId === "tentativeCheckbox") {
+                oFilters.attendee.tentative = bSelected;
+            } else if (sId === "canceledCheckbox") {
+                oFilters.attendee.canceled = bSelected;
+            } else if (sId === "notRespondedCheckbox") {
+                oFilters.attendee.notResponded = bSelected;
+            }
+            oViewModel.setProperty("/filters", oFilters);
+            this.applyFilters();
+        },
+
+        onUnselectAllRight: function () {
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+            // Reset organizer filters
+            oFilters.organizer.sent = false;
+            oFilters.organizer.draft = false;
+            // Reset attendee filters
+            oFilters.attendee.accepted = false;
+            oFilters.attendee.declined = false;
+            oFilters.attendee.followed = false;
+            oFilters.attendee.tentative = false;
+            oFilters.attendee.canceled = false;
+            oFilters.attendee.notResponded = false;
+            oViewModel.setProperty("/filters", oFilters);
+            // Update the checkboxes
+            this.byId("sentCheckbox").setSelected(false);
+            this.byId("draftCheckbox").setSelected(false);
+            this.byId("acceptedCheckbox").setSelected(false);
+            this.byId("declinedCheckbox").setSelected(false);
+            this.byId("followedCheckbox").setSelected(false);
+            this.byId("tentativeCheckbox").setSelected(false);
+            this.byId("canceledCheckbox").setSelected(false);
+            this.byId("notRespondedCheckbox").setSelected(false);
+            this.applyFilters();
+        },
+
+        // Unselect all handlers - Updated to properly clear all filters
+        onAppointmentsUnselectAll: function (oEvent) {
+            this._unselectAllFilters("appointments");
+        },
+
+        onMeetingsUnselectAll: function (oEvent) {
+            this._unselectAllFilters("meetings");
+        },
+
+        onReservationsUnselectAll: function (oEvent) {
+            this._unselectAllFilters("reservations");
+        },
+
+        onCategoriesUnselectAll: function (oEvent) {
+            this._unselectAllFilters("categories");
+        },
+
+        onShowAsUnselectAll: function (oEvent) {
+            this._unselectAllFilters("showAs");
+        },
+
+        onRecurrenceUnselectAll: function (oEvent) {
+            this._unselectAllFilters("recurrence");
+        },
+
+        onInPersonUnselectAll: function (oEvent) {
+            this._unselectAllFilters("inPerson");
+        },
+
+        // Generic method to unselect all filters in a category
+        // _unselectAllFilters: function (sFilterType) {
+        //     var oViewModel = this.getView().getModel("view");
+        //     var oFilters = oViewModel.getProperty("/filters");
+
+        //     // Reset the filter array for this type
+        //     if (Array.isArray(oFilters[sFilterType])) {
+        //         oFilters[sFilterType] = [];
+        //     } else {
+        //         oFilters[sFilterType] = false;
+        //     }
+
+        //     oViewModel.setProperty("/filters", oFilters);
+
+        //     // Get the popover and unselect all checkboxes
+        //     var sPopoverId = sFilterType + "FilterPopover";
+        //     var oPopover = this.byId(sPopoverId);
+
+        //     if (oPopover) {
+        //         // Find all checkboxes in the popover
+        //         var aCheckboxes = oPopover.findAggregatedObjects(true, function(oControl) {
+        //             return oControl.isA("sap.m.CheckBox");
+        //         });
+
+        //         // Unselect all checkboxes
+        //         aCheckboxes.forEach(function(oCheckbox) {
+        //             oCheckbox.setSelected(false);
+        //         });
+        //     }
+
+        //     // Apply the updated filters
+        //     this.applyFilters();
+
+        //     // Show confirmation message
+        //     MessageToast.show("All " + sFilterType + " filters cleared");
+        // },
+
+        // Generic method to unselect all filters in a category
+        _unselectAllFilters: function (sFilterType) {
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+
+            // Reset the filter array for this type
+            if (Array.isArray(oFilters[sFilterType])) {
+                oFilters[sFilterType] = [];
+            } else {
+                oFilters[sFilterType] = false;
+            }
+
+            oViewModel.setProperty("/filters", oFilters);
+
+            // Get the popover and unselect all checkboxes
+            var sPopoverId = sFilterType + "FilterPopover";
+            var oPopover = this.byId(sPopoverId);
+
+            if (oPopover) {
+                // Find all checkboxes in the popover
+                var aCheckboxes = oPopover.findAggregatedObjects(true, function (oControl) {
+                    return oControl.isA("sap.m.CheckBox");
+                });
+
+                // Unselect all checkboxes
+                aCheckboxes.forEach(function (oCheckbox) {
+                    oCheckbox.setSelected(false);
+                });
+            }
+
+            // Apply the updated filters
+            this.applyFilters();
+
+            // Show confirmation message
+            MessageToast.show("All " + sFilterType + " filters cleared");
+        },
+
+        // Filter selection handlers
+        onAppointmentsFilterSelect: function (oEvent) {
+            this._updateFilterArray("appointments", oEvent);
+        },
+
+        onMeetingsFilterSelect: function (oEvent) {
+            this._updateFilterArray("meetings", oEvent);
+        },
+
+        onReservationsFilterSelect: function (oEvent) {
+            this._updateFilterArray("reservations", oEvent);
+        },
+
+        onCategoriesFilterSelect: function (oEvent) {
+            this._updateFilterArray("categories", oEvent);
+        },
+
+        onShowAsFilterSelect: function (oEvent) {
+            this._updateFilterArray("showAs", oEvent);
+        },
+
+        onRecurrenceFilterSelect: function (oEvent) {
+            this._updateFilterArray("recurrence", oEvent);
+        },
+
+        onInPersonFilterSelect: function (oEvent) {
+            this._updateFilterArray("inPerson", oEvent);
+        },
+
+        _updateFilterArray: function (sFilterType, oEvent) {
+            var sValue = oEvent.getSource().getText();
+            var bSelected = oEvent.getParameter("selected");
+            var oViewModel = this.getView().getModel("view");
+            var oFilters = oViewModel.getProperty("/filters");
+            if (!oFilters[sFilterType]) {
+                oFilters[sFilterType] = [];
+            }
+            if (bSelected) {
+                if (oFilters[sFilterType].indexOf(sValue) === -1) {
+                    oFilters[sFilterType].push(sValue);
+                }
+            } else {
+                var iIndex = oFilters[sFilterType].indexOf(sValue);
+                if (iIndex !== -1) {
+                    oFilters[sFilterType].splice(iIndex, 1);
+                }
+            }
+            oViewModel.setProperty("/filters", oFilters);
+            this.applyFilters();
+        },
+
+        // onClearFilters: function () {
+        //     // Reset all filter checkboxes
+        //     var aCheckBoxIds = [
+        //         "appointmentsCheckbox", "meetingsCheckbox", "reservationsCheckbox"
+        //     ];
+        //     aCheckBoxIds.forEach(function (sId) {
+        //         var oCheckBox = this.byId(sId);
+        //         if (oCheckBox) {
+        //             oCheckBox.setSelected(sId === "appointmentsCheckbox" || sId === "meetingsCheckbox");
+        //         }
+        //     }.bind(this));
+
+        //     // Reset organizer and attendee filters
+        //     this.byId("sentCheckbox").setSelected(true);
+        //     this.byId("draftCheckbox").setSelected(true);
+        //     this.byId("acceptedCheckbox").setSelected(true);
+        //     this.byId("declinedCheckbox").setSelected(true);
+        //     this.byId("followedCheckbox").setSelected(true);
+        //     this.byId("tentativeCheckbox").setSelected(true);
+        //     this.byId("canceledCheckbox").setSelected(true);
+        //     this.byId("notRespondedCheckbox").setSelected(true);
+
+        //     // Reset filter arrays in model
+        //     var oViewModel = this.getView().getModel("view");
+        //     oViewModel.setProperty("/filters", {
+        //         appointments: true,
+        //         meetings: true,
+        //         reservations: false,
+        //         categories: [],
+        //         showAs: [],
+        //         recurrence: [],
+        //         inPerson: [],
+        //         organizer: {
+        //             sent: true,
+        //             draft: true
+        //         },
+        //         attendee: {
+        //             accepted: true,
+        //             declined: true,
+        //             followed: true,
+        //             tentative: true,
+        //             canceled: true,
+        //             notResponded: true
+        //         }
+        //     });
+
+        //     // Apply empty filters
+        //     this._aFilters = [];
+        //     var oCalendar = this.byId("calendar");
+        //     oCalendar.getBinding("rows").filter([]);
+
+        //     // Update filter button text
+        //     this.byId("_IDGenButton7").setText("Filter");
+        //     MessageToast.show("All filters cleared");
+        // },
+
+        onClearFilters: function () {
+            // Reset all filter checkboxes
+            var aCheckBoxIds = [
+                "appointmentsCheckbox", "meetingsCheckbox", "reservationsCheckbox"
+            ];
+            aCheckBoxIds.forEach(function (sId) {
+                var oCheckBox = this.byId(sId);
+                if (oCheckBox) {
+                    oCheckBox.setSelected(false); // Clear all selections
+                }
+            }.bind(this));
+
+            // Reset organizer and attendee filters
+            this.byId("sentCheckbox").setSelected(false);
+            this.byId("draftCheckbox").setSelected(false);
+            this.byId("acceptedCheckbox").setSelected(false);
+            this.byId("declinedCheckbox").setSelected(false);
+            this.byId("followedCheckbox").setSelected(false);
+            this.byId("tentativeCheckbox").setSelected(false);
+            this.byId("canceledCheckbox").setSelected(false);
+            this.byId("notRespondedCheckbox").setSelected(false);
+
+            // Reset filter arrays in model
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/filters", {
+                appointments: false, // Clear appointments
+                meetings: false,     // Clear meetings
+                reservations: false,  // Clear reservations
+                categories: [],
+                showAs: [],
+                recurrence: [],
+                inPerson: [],
+                organizer: {
+                    sent: false,
+                    draft: false
+                },
+                attendee: {
+                    accepted: false,
+                    declined: false,
+                    followed: false,
+                    tentative: false,
+                    canceled: false,
+                    notResponded: false
+                }
+            });
+
+            // Apply empty filters
+            this._aFilters = [];
+            var oCalendar = this.byId("calendar");
+            oCalendar.getBinding("rows").filter([]);
+
+            // Update filter button text
+            this.byId("_IDGenButton7").setText("Filter");
+            MessageToast.show("All filters cleared");
+        },
+
+        // Drag and Drop functionality
+        handleAppointmentDragEnter: function (oEvent) {
+            if (this.isAppointmentOverlap(oEvent, oEvent.getParameter("calendarRow"))) {
+                oEvent.preventDefault();
+            }
+        },
+
+        handleAppointmentDrop: function (oEvent) {
+            var oAppointment = oEvent.getParameter("appointment"),
+                oStartDate = oEvent.getParameter("startDate"),
+                oEndDate = oEvent.getParameter("endDate"),
+                oCalendarRow = oEvent.getParameter("calendarRow"),
+                bCopy = oEvent.getParameter("copy"),
+                sTitle = oAppointment.getTitle(),
+                oModel = this.getView().getModel(),
+                oAppBindingContext = oAppointment.getBindingContext(),
+                oRowBindingContext = oCalendarRow.getBindingContext(),
+                handleAppointmentDropBetweenRows = function () {
+                    var aPath = oAppBindingContext.getPath().split("/");
+                    var iIndex = aPath.pop();
+                    var sRowAppointmentsPath = aPath.join("/");
+                    oRowBindingContext.getObject().appointments.push(
+                        oModel.getProperty(oAppBindingContext.getPath())
+                    );
+                    oModel.getProperty(sRowAppointmentsPath).splice(iIndex, 1);
+                };
+            if (bCopy) { // "copy" appointment
+                var oProps = Object.assign({}, oModel.getProperty(oAppointment.getBindingContext().getPath()));
+                oProps.start = oStartDate;
+                oProps.end = oEndDate;
+                oRowBindingContext.getObject().appointments.push(oProps);
+            } else { // "move" appointment
+                oModel.setProperty("start", oStartDate, oAppBindingContext);
+                oModel.setProperty("end", oEndDate, oAppBindingContext);
+                if (oAppointment.getParent() !== oCalendarRow) {
+                    handleAppointmentDropBetweenRows();
+                }
+            }
+            oModel.refresh(true);
+        },
+
+        handleAppointmentResize: function (oEvent) {
+            var oAppointment = oEvent.getParameter("appointment"),
+                oStartDate = oEvent.getParameter("startDate"),
+                oEndDate = oEvent.getParameter("endDate");
+            if (!this.isAppointmentOverlap(oEvent, oAppointment.getParent())) {
+                oAppointment
+                    .setStartDate(oStartDate)
+                    .setEndDate(oEndDate);
+            } else {
+                MessageToast.show("As a manager you can not resize events if they overlap with another events");
+            }
+        },
+
+        // Modified handleAppointmentCreate to open event details fragment
+        handleAppointmentCreate: function (oEvent) {
+            var oStartDate = oEvent.getParameter("startDate"),
+                oEndDate = oEvent.getParameter("endDate"),
+                oPlanningCalendarRow = oEvent.getParameter("calendarRow"),
+                oModel = this.getView().getModel(),
+                sPath = oPlanningCalendarRow.getBindingContext().getPath();
+            // Create a new appointment object
+            var newAppointment = {
+                title: "New Appointment",
+                start: oStartDate,
+                end: oEndDate,
+                info: "",
+                type: "Type01",
+                category: "Appointment",
+                showAs: "Busy",
+                recurrence: "Non-recurring",
+                inPerson: "In-person",
+                organizerStatus: "sent",
+                attendeeStatus: "accepted",
+                isNew: true // Flag to indicate it's a new appointment
+            };
+            // Set the selected event in the view model
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedEvent", newAppointment);
+            // Open the event details fragment
+            this._openEventDetailsPopover(oEvent.getParameter("domRef"));
+            MessageToast.show("New Appointment is created at \n" + oStartDate + "\n and end at \n" + oEndDate + ".");
+        },
+
+        isAppointmentOverlap: function (oEvent, oCalendarRow) {
+            var oAppointment = oEvent.getParameter("appointment"),
+                oStartDate = oEvent.getParameter("startDate"),
+                oEndDate = oEvent.getParameter("endDate"),
+                bAppointmentOverlapped;
+            if (this.getUserRole() === this.roles.manager) {
+                bAppointmentOverlapped = oCalendarRow.getAppointments().some(function (oCurrentAppointment) {
+                    if (oCurrentAppointment === oAppointment) {
+                        return;
+                    }
+                    var oAppStartTime = oCurrentAppointment.getStartDate().getTime(),
+                        oAppEndTime = oCurrentAppointment.getEndDate().getTime();
+                    if (oAppStartTime <= oStartDate.getTime() && oStartDate.getTime() < oAppEndTime) {
+                        return true;
+                    }
+                    if (oAppStartTime < oEndDate.getTime() && oEndDate.getTime() <= oAppEndTime) {
+                        return true;
+                    }
+                    if (oStartDate.getTime() <= oAppStartTime && oAppStartTime < oEndDate.getTime()) {
+                        return true;
+                    }
+                });
+            }
+            return bAppointmentOverlapped;
+        },
+
+        // Toolbar and UI functionality
+        onTodayPress: function () {
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/startDate", UI5Date.getInstance());
+            MessageToast.show("Navigated to today");
+        },
+
+        onViewSelectPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            var oViewPopover = this.byId("viewPopover");
+            // Close other popovers
+            this.byId("filterPopover").close();
+            this.byId("newEventPopover").close();
+            this.byId("eventDetailsPopover").close();
+            // Toggle view popover
+            if (!oViewPopover.isOpen()) {
+                oViewPopover.openBy(oButton);
+            } else {
+                oViewPopover.close();
+            }
+        },
+
+        onFilterPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            var oFilterPopover = this.byId("filterPopover");
+            // Close other popovers
+            this.byId("viewPopover").close();
+            this.byId("newEventPopover").close();
+            this.byId("eventDetailsPopover").close();
+            // Toggle filter popover
+            if (!oFilterPopover.isOpen()) {
+                oFilterPopover.openBy(oButton);
+            } else {
+                oFilterPopover.close();
+            }
+        },
+
+        onNewEventPress: function (oEvent) {
+            var oButton = oEvent.getSource();
+            var oNewEventPopover = this.byId("newEventPopover");
+            // Close other popovers
+            this.byId("viewPopover").close();
+            this.byId("filterPopover").close();
+            this.byId("eventDetailsPopover").close();
+            // Toggle new event popover
+            if (!oNewEventPopover.isOpen()) {
+                oNewEventPopover.openBy(oButton);
+            } else {
+                oNewEventPopover.close();
+            }
+        },
+
+        onNotificationPress: function () {
+            MessageToast.show("No new notifications");
+        },
+
+        // Work week menu functionality
+        onWorkWeekMenuPress: function (oEvent) {
+            var oViewModel = this.getView().getModel("view");
+            var bMenuOpen = oViewModel.getProperty("/workWeekMenuOpen");
+            // Toggle the menu visibility
+            oViewModel.setProperty("/workWeekMenuOpen", !bMenuOpen);
+            // Update the arrow icon direction
+            var oButton = this.byId("_IDGenWorkWeekButton");
+            oButton.setIcon(!bMenuOpen ? "sap-icon://slim-arrow-down" : "sap-icon://slim-arrow-right");
+        },
+
+        // Time scale dropdown change handler
+        onTimeScaleChange: function (oEvent) {
+            var oViewModel = this.getView().getModel("view");
+            var oSource = oEvent.getSource();
+            var sSelectedKey = oSource.getSelectedKey();
+            // Extract the number of minutes from the selected key
+            var iMinutes = parseInt(sSelectedKey);
+            // Update the model
+            oViewModel.setProperty("/timeScale", iMinutes + " minutes");
+            oViewModel.setProperty("/timeScaleMinutes", iMinutes);
+            // Get current days to show
+            var iDays = oViewModel.getProperty("/daysToShow");
+            // Update the button text to show both days and time scale
+            var oButton = this.byId("viewSelectButton");
+            oButton.setText("Work week (" + iDays + " days, " + iMinutes + " min)");
+            // Update the calendar's time scale
+            this._updateTimeScale(iMinutes);
+            // Make sure we're in Work week view
+            var oCalendar = this.byId("calendar");
+            oCalendar.setViewKey("Workweek");
+            oViewModel.setProperty("/currentView", "Work week");
+            MessageToast.show("Time scale changed to: " + iMinutes + " minutes");
+        },
+
+        // Days to show dropdown change handler
+        onDaysToShowChange: function (oEvent) {
+            var oViewModel = this.getView().getModel("view");
+            var oSource = oEvent.getSource();
+            var iDays = parseInt(oSource.getSelectedKey());
+            // Update the model
+            oViewModel.setProperty("/daysToShow", iDays);
+            // Get current time scale
+            var sTimeScale = oViewModel.getProperty("/timeScale");
+            var iMinutes = parseInt(sTimeScale.match(/\d+/)[0]);
+            // Update the button text to show both days and time scale
+            var oButton = this.byId("viewSelectButton");
+            oButton.setText("Work week (" + iDays + " days, " + iMinutes + " min)");
+            // Update the work week view
+            this._updateWorkWeekView(iDays);
+            // Make sure we're in Work week view
+            var oCalendar = this.byId("calendar");
+            oCalendar.setViewKey("Workweek");
+            oViewModel.setProperty("/currentView", "Work week");
+            MessageToast.show("Work week now shows " + iDays + " days");
+        },
+
+        // Days dropdown change handler (main view selection)
+        onDaysChange: function (oEvent) {
+            var oSource = oEvent.getSource();
+            var iDays = parseInt(oSource.getSelectedKey());
+            // Update the model
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/daysToShow", iDays);
+            // Set the current view to Work week
+            oViewModel.setProperty("/currentView", "Work week");
+            // Update the button text
+            var oButton = this.byId("viewSelectButton");
+            var sTimeScale = oViewModel.getProperty("/timeScale");
+            var iMinutes = parseInt(sTimeScale.match(/\d+/)[0]);
+            oButton.setText("Work week (" + iDays + " days, " + iMinutes + " min)");
+            // Update the calendar
+            var oCalendar = this.byId("calendar");
+            oCalendar.setViewKey("Workweek");
+            // Update the work week view
+            this._updateWorkWeekView(iDays);
+            // Close the popover
+            this.byId("viewPopover").close();
+            MessageToast.show("Work week now shows " + iDays + " days");
+        },
+
+        onViewSelected: function (oEvent) {
+            var sSelectedView = oEvent.getParameter("listItem").getTitle();
+            var oButton = this.byId("viewSelectButton");
+            var oCalendar = this.byId("calendar");
+            var oViewModel = this.getView().getModel("view");
+            // Close the popover first
+            this.byId("viewPopover").close();
+            // Handle regular view selection
+            if (sSelectedView === "Work week") {
+                oButton.setText(sSelectedView);
+                oViewModel.setProperty("/currentView", sSelectedView);
+                // Update calendar view
+                oCalendar.setViewKey("Workweek");
+                // Get current settings
+                var iDaysToShow = oViewModel.getProperty("/daysToShow");
+                var sTimeScale = oViewModel.getProperty("/timeScale");
+                var iMinutes = parseInt(sTimeScale.match(/\d+/)[0]);
+                // Update button text to show both days and time scale
+                oButton.setText("Work week (" + iDaysToShow + " days, " + iMinutes + " min)");
+                // Update the work week view and time scale
+                this._updateWorkWeekView(iDaysToShow);
+                this._updateTimeScale(iMinutes);
+                MessageToast.show("View changed to: " + sSelectedView);
+            } else if (sSelectedView === "Week") {
+                oButton.setText(sSelectedView);
+                oViewModel.setProperty("/currentView", sSelectedView);
+                // Update calendar view
+                oCalendar.setViewKey("Week");
+                // Force refresh to ensure proper rendering
+                oCalendar.rerender();
+                MessageToast.show("View changed to: " + sSelectedView);
+            } else if (sSelectedView === "Month") {
+                oButton.setText(sSelectedView);
+                oViewModel.setProperty("/currentView", sSelectedView);
+                // Update calendar view
+                oCalendar.setViewKey("Month");
+                // Force refresh to ensure proper rendering
+                oCalendar.rerender();
+                MessageToast.show("View changed to: " + sSelectedView);
+            } else if (sSelectedView === "Split view") {
+                MessageToast.show("Split view feature coming soon");
+            }
+        },
+
+        _switchCalendarView: function (sViewKey) {
+            var oCalendar = this.byId("calendar");
+            var oViewModel = this.getView().getModel("view");
+            // Set the view key
+            oCalendar.setViewKey(sViewKey);
+            // Update the current view in the model
+            oViewModel.setProperty("/currentView", sViewKey);
+            // Force a rerender to ensure proper display
+            oCalendar.rerender();
+        },
+
+        _updateTimeScale: function (iMinutes) {
+            var oCalendar = this.byId("calendar");
+            var oViewModel = this.getView().getModel("view");
+            var sCurrentView = oViewModel;
+
+            // Only update time scale for Day and Work week views
+            if (sCurrentView === "Day" || sCurrentView === "Work week") {
+                var oView = oCalendar.getViews().find(function (view) {
+                    return view.getKey() === (sCurrentView === "Work week" ? "Workweek" : sCurrentView);
+                });
+
+                if (oView) {
+                    // Calculate the number of intervals based on the selected minutes
+                    var iTotalMinutes = 24 * 60; // 24 hours in minutes
+                    var iIntervals = iTotalMinutes / iMinutes;
+
+                    // Update the view settings
+                    oView.setIntervalsS(iIntervals);
+                    oView.setIntervalsM(iIntervals);
+                    oView.setIntervalsL(iIntervals);
+                    oView.setIntervalType("Minute"); // Use string value directly
+
+                    // Refresh the calendar
+                    oCalendar.rerender();
+                }
+            }
+        },
+
+        _updateWorkWeekView: function (iDays) {
+            var oCalendar = this.byId("calendar");
+            var oView = oCalendar.getViews().find(function (view) {
+                return view.getKey() === "Workweek";
+            });
+
+            if (oView) {
+                // Update the number of days to show
+                oView.setIntervalsS(iDays);
+                oView.setIntervalsM(iDays);
+                oView.setIntervalsL(iDays);
+
+                // Refresh the calendar
+                oCalendar.rerender();
+            }
+        },
+
+        onSavedViewsPress: function () {
+            MessageToast.show("Saved views feature coming soon");
+        },
+
+        onNewEventTypeSelected: function (oEvent) {
+            var sEventType = oEvent.getSource().getTitle();
+            this.byId("newEventPopover").close();
+
+            if (sEventType === "Channel meeting") {
+                this._openChannelMeetingDialog();
+            } else if (sEventType === "Event") {
+                this._openRemarksDialog();
+            } else if (sEventType === "Virtual appointment") {
+                this._openVirtualAppointmentDialog();
+            } else {
+                MessageToast.show("Creating new: " + sEventType);
+            }
+        },
+
+        // Open the Channel Meeting Dialog
+        _openChannelMeetingDialog: function () {
+            // Reset status properties
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/attendeeStatus/requiredAttendeesStatus", "");
+            oViewModel.setProperty("/attendeeStatus/optionalAttendeesStatus", "");
+
+            if (!this._oChannelMeetingDialog) {
+                // Load ChannelMeetingDialog (must match file path & name exactly)
+                this._oChannelMeetingDialog = new sap.ui.xmlfragment(
+                    this.getView().getId(),  // always pass view id for scoping
+                    "com.capexrevex.capexrevex.Fragments.ChannelMeetingDialog", // no .fragment.xml here
+                    this
+                );
+                this.getView().addDependent(this._oChannelMeetingDialog);
+
+                // Set the models for the fragment
+                this._oChannelMeetingDialog.setModel(this.getView().getModel());
+                this._oChannelMeetingDialog.setModel(this.getView().getModel("attendees"), "attendees");
+
+                this._oChannelMeetingDialog.open();
+            }
+
+            // Set default values for new channel meeting
+            var oMeetingDate = UI5Date.getInstance();
+            oMeetingDate.setHours(10, 0, 0, 0);
+
+            var oEnd = UI5Date.getInstance(oMeetingDate);
+            oEnd.setHours(11, 0, 0, 0);
+
+            oViewModel.setProperty("/selectedChannelMeeting", {
+                title: "",
+                start: oMeetingDate,
+                end: oEnd,
+                agenda: "",
+                type: "Type02",
+                icon: "",
+                requiredAttendees: [],
+                optionalAttendees: [],
+                attendeeStatus: "",
+                isNew: true
+            });
+
+            this._oChannelMeetingDialog.open();
+        },
+
+
+        // Open the Virtual Appointment Dialog
+        _openVirtualAppointmentDialog: function () {
+            if (!this._oVirtualAppointmentDialog) {
+                // Load VirtualAppointmentDialog (must match file path & name exactly)
+                this._oVirtualAppointmentDialog = new sap.ui.xmlfragment(
+                    this.getView().getId(),  // always pass view id for scoping
+                    "com.capexrevex.capexrevex.Fragments.VirtualAppointmentDialog", // no .fragment.xml here
+                    this
+                );
+                this.getView().addDependent(this._oVirtualAppointmentDialog);
+
+                // Set the models for the fragment
+                this._oVirtualAppointmentDialog.setModel(this.getView().getModel());
+                this._oVirtualAppointmentDialog.setModel(this.getView().getModel("attendees"), "attendees");
+
+                this._oVirtualAppointmentDialog.open();
+            }
+
+            // Set default values for new virtual appointment
+            var oStartDate = UI5Date.getInstance();
+            oStartDate.setHours(14, 0, 0, 0);
+
+            var oEndDate = UI5Date.getInstance(oStartDate);
+            oEndDate.setHours(15, 0, 0, 0);
+
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedVirtualAppointment", {
+                title: "",
+                start: oStartDate,
+                end: oEndDate,
+                meetingLink: "",
+                type: "Type03",
+                icon: "sap-icon://video",
+                attendees: [],
+                attendeeStatus: "",
+                isNew: true
+            });
+
+            this._oVirtualAppointmentDialog.open();
+        },
+
+
+        _setDefaultChannelMeetingValues: function () {
+            // Set default date and time to current time
+            var oNow = UI5Date.getInstance();
+            var oStart = UI5Date.getInstance(oNow);
+
+            // Round to nearest 30 minutes
+            var minutes = oStart.getMinutes();
+            if (minutes < 15) {
+                oStart.setMinutes(0);
+            } else if (minutes < 45) {
+                oStart.setMinutes(30);
+            } else {
+                oStart.setHours(oStart.getHours() + 1);
+                oStart.setMinutes(0);
+            }
+
+            var oEnd = UI5Date.getInstance(oStart);
+            oEnd.setMinutes(oEnd.getMinutes() + 30);
+
+            // Set values in the dialog if it exists
+            if (this._oChannelMeetingDialog) {
+                var oStartDate = Fragment.byId(this.getView().getId(), "startDate");
+                var oStartTime = Fragment.byId(this.getView().getId(), "startTime");
+                var oEndDate = Fragment.byId(this.getView().getId(), "endDate");
+                var oEndTime = Fragment.byId(this.getView().getId(), "endTime");
+
+                if (oStartDate) oStartDate.setDateValue(oStart);
+                if (oStartTime) oStartTime.setDateValue(oStart);
+                if (oEndDate) oEndDate.setDateValue(oEnd);
+                if (oEndTime) oEndTime.setDateValue(oEnd);
+            }
+        },
+
+        _setDefaultVirtualAppointmentValues: function () {
+            // Set default date and time to current time
+            var oNow = UI5Date.getInstance();
+            var oStart = UI5Date.getInstance(oNow);
+
+            // Round to nearest 30 minutes
+            var minutes = oStart.getMinutes();
+            if (minutes < 15) {
+                oStart.setMinutes(0);
+            } else if (minutes < 45) {
+                oStart.setMinutes(30);
+            } else {
+                oStart.setHours(oStart.getHours() + 1);
+                oStart.setMinutes(0);
+            }
+
+            var oEnd = UI5Date.getInstance(oStart);
+            oEnd.setMinutes(oEnd.getMinutes() + 30);
+
+            // Set default status values
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedEvent/internalAttendeeStatus", "");
+
+            // Set values in the dialog if it exists
+            if (this._oVirtualAppointmentDialog) {
+                var oStartDate = Fragment.byId(this.getView().getId(), "virtualStartDate");
+                var oStartTime = Fragment.byId(this.getView().getId(), "virtualStartTime");
+                var oEndDate = Fragment.byId(this.getView().getId(), "virtualEndDate");
+                var oEndTime = Fragment.byId(this.getView().getId(), "virtualEndTime");
+
+                if (oStartDate) oStartDate.setDateValue(oStart);
+                if (oStartTime) {
+                    oStartTime.setDateValue(oStart);
+                    // Set minutes step based on current time scale
+                    var oViewModel = this.getView().getModel("view");
+                    var iMinutes = oViewModel.getProperty("/timeScaleMinutes");
+                    oStartTime.setMinutesStep(iMinutes);
+                }
+                if (oEndDate) oEndDate.setDateValue(oEnd);
+                if (oEndTime) {
+                    oEndTime.setDateValue(oEnd);
+                    // Set minutes step based on current time scale
+                    var oViewModel = this.getView().getModel("view");
+                    var iMinutes = oViewModel.getProperty("/timeScaleMinutes");
+                    oEndTime.setMinutesStep(iMinutes);
+                }
+
+                // Set default recurrence to "none"
+                var oRecurrenceSelect = Fragment.byId(this.getView().getId(), "virtualRecurrence");
+                if (oRecurrenceSelect) {
+                    oRecurrenceSelect.setSelectedKey("none");
+                }
+            }
+        },
+
+        // Save Channel Meeting
+        onSaveChannelMeeting: function () {
+            try {
+                // Get values from the dialog
+                var sTitle = Fragment.byId(this.getView().getId(), "meetingTitle").getValue();
+
+                // Get required attendees
+                var oRequiredAttendees = Fragment.byId(this.getView().getId(), "requiredAttendees");
+                var aRequiredTokens = oRequiredAttendees.getTokens();
+                var sRequiredAttendees = aRequiredTokens.map(function (oToken) {
+                    return oToken.getKey();
+                }).join("; ");
+
+                // Get optional attendees
+                var oOptionalAttendees = Fragment.byId(this.getView().getId(), "optionalAttendees");
+                var aOptionalTokens = oOptionalAttendees.getTokens();
+                var sOptionalAttendees = aOptionalTokens.map(function (oToken) {
+                    return oToken.getKey();
+                }).join("; ");
+
+                // Get date and time values properly
+                var oStartDateControl = Fragment.byId(this.getView().getId(), "startDate");
+                var oStartTimeControl = Fragment.byId(this.getView().getId(), "startTime");
+                var oEndDateControl = Fragment.byId(this.getView().getId(), "endDate");
+                var oEndTimeControl = Fragment.byId(this.getView().getId(), "endTime");
+
+                var oStartDate = oStartDateControl ? oStartDateControl.getDateValue() : null;
+                var oStartTime = oStartTimeControl ? oStartTimeControl.getDateValue() : null;
+                var oEndDate = oEndDateControl ? oEndDateControl.getDateValue() : null;
+                var oEndTime = oEndTimeControl ? oEndTimeControl.getDateValue() : null;
+
+                var bAllDay = Fragment.byId(this.getView().getId(), "allDayCheckbox").getSelected();
+                var sChannel = Fragment.byId(this.getView().getId(), "channelInput").getValue();
+                var sLocation = Fragment.byId(this.getView().getId(), "locationInput").getValue();
+                var bOnlineMeeting = Fragment.byId(this.getView().getId(), "onlineMeetingCheckbox").getSelected();
+                var sDetails = Fragment.byId(this.getView().getId(), "meetingDetails").getValue();
+                var sAgenda = Fragment.byId(this.getView().getId(), "meetingAgenda").getValue();
+
+                // Validate required fields
+                if (!sTitle) {
+                    MessageToast.show("Please enter a title for the meeting");
+                    return;
+                }
+
+                // Validate date controls exist
+                if (!oStartDate || !oEndDate) {
+                    MessageToast.show("Please select valid dates");
+                    return;
+                }
+
+                // Combine date and time
+                var oStart = new Date(oStartDate);
+                if (!bAllDay && oStartTime) {
+                    oStart.setHours(oStartTime.getHours(), oStartTime.getMinutes(), 0, 0);
+                } else if (bAllDay) {
+                    oStart.setHours(0, 0, 0, 0);
+                }
+
+                var oEnd = new Date(oEndDate);
+                if (!bAllDay && oEndTime) {
+                    oEnd.setHours(oEndTime.getHours(), oEndTime.getMinutes(), 0, 0);
+                } else if (bAllDay) {
+                    oEnd.setHours(23, 59, 59, 999);
+                }
+
+                // Validate that end time is after start time
+                if (oEnd <= oStart) {
+                    MessageToast.show("End time must be after start time");
+                    return;
+                }
+
+                // Create the new appointment object
+                var newAppointment = {
+                    start: oStart,
+                    end: oEnd,
+                    title: sTitle,
+                    info: "Channel: " + sChannel + (sLocation ? " | Location: " + sLocation : ""),
+                    type: "Type01",
+                    pic: "sap-icon://group",
+                    requiredAttendees: sRequiredAttendees,
+                    optionalAttendees: sOptionalAttendees,
+                    details: sDetails,
+                    agenda: sAgenda,
+                    allDay: bAllDay,
+                    onlineMeeting: bOnlineMeeting,
+                    category: "Meeting",
+                    showAs: "Busy",
+                    recurrence: "Non-recurring",
+                    inPerson: bOnlineMeeting ? "Virtual" : "In-person",
+                    organizerStatus: "sent",
+                    attendeeStatus: "accepted",
+                    description: sDetails + " " + sAgenda
+                };
+
+                // Get the model and add the new appointment to the first person's calendar
+                var oModel = this.getView().getModel();
+                var aPeople = oModel.getProperty("/people");
+
+                if (aPeople && aPeople.length > 0) {
+                    // Add to the first person's appointments
+                    aPeople[0].appointments.push(newAppointment);
+
+                    // Update the model
+                    oModel.setProperty("/people", aPeople);
+                    oModel.refresh(true);
+
+                    // Show success message
+                    MessageToast.show("Channel meeting '" + sTitle + "' has been created");
+
+                    // Close the dialog
+                    this._oChannelMeetingDialog.close();
+
+                    // Refresh the calendar to show the new appointment
+                    this.byId("calendar").getBinding("rows").refresh(true);
+                } else {
+                    MessageToast.show("Error: Could not find calendar to add meeting");
+                }
+            } catch (error) {
+                console.error("Error saving channel meeting:", error);
+                MessageToast.show("Error creating meeting. Please try again.");
+            }
+        },
+
+
+        // Save Virtual Appointment
+        onSaveVirtualAppointment: function () {
+            try {
+                var oViewModel = this.getView().getModel("view");
+                var sTitle = Fragment.byId(this.getView().getId(), "virtualTitle").getValue();
+                var sGuestName = Fragment.byId(this.getView().getId(), "guestName").getValue();
+                var sGuestEmail = Fragment.byId(this.getView().getId(), "guestEmail").getValue();
+
+                var oInternalAttendees = Fragment.byId(this.getView().getId(), "internalAttendees");
+                var aInternalTokens = oInternalAttendees.getTokens();
+                var sInternalAttendees = aInternalTokens.map(function (oToken) {
+                    return oToken.getKey();
+                }).join("; ");
+
+                var oStartDateControl = Fragment.byId(this.getView().getId(), "virtualStartDate");
+                var oStartTimeControl = Fragment.byId(this.getView().getId(), "virtualStartTime");
+                var oEndDateControl = Fragment.byId(this.getView().getId(), "virtualEndDate");
+                var oEndTimeControl = Fragment.byId(this.getView().getId(), "virtualEndTime");
+
+                var oStartDate = oStartDateControl.getDateValue();
+                var oStartTime = oStartTimeControl.getDateValue();
+                var oEndDate = oEndDateControl.getDateValue();
+                var oEndTime = oEndTimeControl.getDateValue();
+
+                var bAllDay = Fragment.byId(this.getView().getId(), "virtualAllDay").getSelected();
+                var sLocation = Fragment.byId(this.getView().getId(), "virtualLocation").getValue();
+                var sPresenterOptions = Fragment.byId(this.getView().getId(), "presenterOptions").getSelectedKey();
+                var bRecordAutomatically = Fragment.byId(this.getView().getId(), "recordAutomatically").getSelected();
+                var sMeetingChat = Fragment.byId(this.getView().getId(), "meetingChat").getSelectedKey();
+                var sMessage = Fragment.byId(this.getView().getId(), "virtualMessage").getValue();
+
+                if (!sTitle) {
+                    MessageToast.show("Please enter a title for the appointment");
+                    return;
+                }
+
+                if (!sGuestName || !sGuestEmail) {
+                    MessageToast.show("Please enter guest name and email");
+                    return;
+                }
+
+                if (!oStartDate || !oEndDate) {
+                    MessageToast.show("Please select valid dates");
+                    return;
+                }
+
+                var oStart = new Date(oStartDate);
+                if (!bAllDay && oStartTime) {
+                    oStart.setHours(oStartTime.getHours(), oStartTime.getMinutes(), 0, 0);
+                } else if (bAllDay) {
+                    oStart.setHours(0, 0, 0, 0);
+                }
+
+                var oEnd = new Date(oEndDate);
+                if (!bAllDay && oEndTime) {
+                    oEnd.setHours(oEndTime.getHours(), oEndTime.getMinutes(), 0, 0);
+                } else if (bAllDay) {
+                    oEnd.setHours(23, 59, 59, 999);
+                }
+
+                if (oEnd <= oStart) {
+                    MessageToast.show("End time must be after start time");
+                    return;
+                }
+
+                var newAppointment = {
+                    start: oStart,
+                    end: oEnd,
+                    title: sTitle,
+                    info: "Virtual Appointment with " + sGuestName + " (" + sGuestEmail + ")",
+                    type: "Type01",
+                    pic: "sap-icon://video",
+                    internalAttendees: sInternalAttendees,
+                    location: sLocation,
+                    presenterOptions: sPresenterOptions,
+                    recordAutomatically: bRecordAutomatically,
+                    meetingChat: sMeetingChat,
+                    message: sMessage,
+                    allDay: bAllDay,
+                    isVirtual: true,
+                    category: "Appointment",
+                    showAs: "Busy",
+                    recurrence: "Non-recurring",
+                    inPerson: "Virtual",
+                    organizerStatus: "sent",
+                    attendeeStatus: "accepted",
+                    description: sMessage
+                };
+
+                var oModel = this.getView().getModel();
+                var aPeople = oModel.getProperty("/people");
+
+                if (aPeople && aPeople.length > 0) {
+                    aPeople[0].appointments.push(newAppointment);
+                    oModel.setProperty("/people", aPeople);
+                    oModel.refresh(true);
+
+                    MessageToast.show("Virtual appointment '" + sTitle + "' has been created");
+
+                    // Refresh calendar to show the new appointment
+                    this.byId("calendar").getBinding("rows").refresh(true);
+                } else {
+                    MessageToast.show("Error: Could not find calendar to add appointment");
+                }
+
+                if (this._oVirtualAppointmentDialog) {
+                    this._oVirtualAppointmentDialog.close();
+                }
+            } catch (error) {
+                console.error("Error saving virtual appointment:", error);
+                MessageToast.show("Error creating appointment. Please try again.");
+            }
+        },
+
+
+        // Cancel Channel Meeting
+        onCancelChannelMeeting: function () {
+            // Close the dialog without saving
+            if (this._oChannelMeetingDialog) {
+                this._oChannelMeetingDialog.close();
+            }
+            MessageToast.show("Channel meeting creation cancelled");
+        },
+
+        // Cancel Virtual Appointment
+        onCancelVirtualAppointment: function () {
+            // Close the dialog without saving
+            if (this._oVirtualAppointmentDialog) {
+                this._oVirtualAppointmentDialog.close();
+            }
+            MessageToast.show("Virtual appointment creation cancelled");
+        },
+
+        // Add additional guest
+        onAddGuest: function () {
+            MessageToast.show("Additional guest feature coming soon");
+        },
+
+        // Handle All Day checkbox changes
+        onAllDayChange: function (oEvent) {
+            var bAllDay = oEvent.getParameter("state");
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedEvent/allDay", bAllDay);
+
+            if (bAllDay) {
+                var oStart = new Date(oViewModel.getProperty("/selectedEvent/start"));
+                oStart.setHours(0, 0, 0, 0);
+                oViewModel.setProperty("/selectedEvent/start", oStart);
+
+                var oEnd = new Date(oViewModel.getProperty("/selectedEvent/end"));
+                oEnd.setHours(23, 59, 59, 999);
+                oViewModel.setProperty("/selectedEvent/end", oEnd);
+            } else {
+                var oStart = new Date(oViewModel.getProperty("/selectedEvent/start"));
+                if (oStart.getHours() === 0) {
+                    oStart.setHours(10, 0, 0, 0);
+                }
+                oViewModel.setProperty("/selectedEvent/start", oStart);
+
+                var oEnd = new Date(oViewModel.getProperty("/selectedEvent/end"));
+                if (oEnd.getHours() === 23) {
+                    oEnd.setHours(10, 30, 0, 0);
+                }
+                oViewModel.setProperty("/selectedEvent/end", oEnd);
+            }
+        },
+
+        onStartDateChange: function (oEvent) {
+            var oDate = oEvent.getSource().getDateValue();
+            if (!oDate) return;
+
+            var oViewModel = this.getView().getModel("view");
+            var oStart = new Date(oViewModel.getProperty("/selectedEvent/start"));
+            oStart.setFullYear(oDate.getFullYear(), oDate.getMonth(), oDate.getDate());
+            oViewModel.setProperty("/selectedEvent/start", oStart);
+        },
+
+        onStartTimeChange: function (oEvent) {
+            var oTime = oEvent.getSource().getDateValue();
+            if (!oTime) return;
+
+            var oViewModel = this.getView().getModel("view");
+            var oStart = new Date(oViewModel.getProperty("/selectedEvent/start"));
+            oStart.setHours(oTime.getHours(), oTime.getMinutes(), 0, 0);
+            oViewModel.setProperty("/selectedEvent/start", oStart);
+        },
+
+        onEndDateChange: function (oEvent) {
+            var oDate = oEvent.getSource().getDateValue();
+            if (!oDate) return;
+
+            var oViewModel = this.getView().getModel("view");
+            var oEnd = new Date(oViewModel.getProperty("/selectedEvent/end"));
+            oEnd.setFullYear(oDate.getFullYear(), oDate.getMonth(), oDate.getDate());
+            oViewModel.setProperty("/selectedEvent/end", oEnd);
+        },
+
+        onEndTimeChange: function (oEvent) {
+            var oTime = oEvent.getSource().getDateValue();
+            if (!oTime) return;
+
+            var oViewModel = this.getView().getModel("view");
+            var oEnd = new Date(oViewModel.getProperty("/selectedEvent/end"));
+            oEnd.setHours(oTime.getHours(), oTime.getMinutes(), 0, 0);
+            oViewModel.setProperty("/selectedEvent/end", oEnd);
+        },
+
+        onMoreOptionsPress: function () {
+            MessageToast.show("More options coming soon");
+        },
+
+        // Modified onAppointmentSelect method
+        onAppointmentSelect: function (oEvent) {
+            var oAppointment = oEvent.getParameter("appointment");
+            var oBindingContext = oAppointment.getBindingContext();
+
+            // Close other popovers
+            this.byId("viewPopover").close();
+            this.byId("filterPopover").close();
+            this.byId("newEventPopover").close();
+
+            // Get appointment data
+            var oAppointmentData = oBindingContext.getObject();
+
+            // Extract attendees from appointment
+            var aAttendees = this._extractAttendeesFromAppointment(oAppointmentData);
+            var sTitle = oAppointmentData.title;
+            if (sTitle === "new appointment") {
+                sTitle = "";
+            }
+
+            // Update selected event in model
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedEvent", {
+                title: sTitle,
+                start: oAppointmentData.start,
+                end: oAppointmentData.end,
+                location: oAppointmentData.info || "",
+                description: oAppointmentData.description || "",
+                allDay: oAppointmentData.allDay || false,
+                attendees: aAttendees,
+                meetingLink: oAppointmentData.meetingLink || ""
+            });
+            oViewModel.setProperty("/selectedEventPath", oBindingContext.getPath());
+
+            // Open event details popover using the new fragment
+            this._openEventDetailsPopover(oEvent.getParameter("domRef"));
+        },
+
+        // Modified onIntervalSelect method
+        onIntervalSelect: function (oEvent) {
+            var oStartDate = oEvent.getParameter("startDate"),
+                oEndDate = oEvent.getParameter("endDate"),
+                oRow = oEvent.getParameter("row"),
+                oModel = this.getView().getModel(),
+                oAppointment = {
+                    start: oStartDate,
+                    end: oEndDate,
+                    title: "new appointment",
+                    info: "",
+                    type: "Type01",
+                    location: "",
+                    description: "",
+                    allDay: false,
+                    attendees: "",
+                    category: "Appointment",
+                    showAs: "Busy",
+                    recurrence: "Non-recurring",
+                    inPerson: "In-person",
+                    organizerStatus: "sent",
+                    attendeeStatus: "accepted"
+                };
+            var oRowContext = oRow.getBindingContext();
+            var sPath = oRowContext.getPath() + "/appointments";
+            var aAppointments = oModel.getProperty(sPath) || [];
+            aAppointments.push(oAppointment);
+            oModel.setProperty(sPath, aAppointments);
+            MessageToast.show("New appointment created. Click on it to edit.");
+        },
+
+        // Add this method to open the event details popover
+        _openEventDetailsPopover: function (oSource) {
+            var that = this;
+
+            // Load the fragment if not already loaded
+            if (!this._oEventDetailsPopover) {
+                Fragment.load({
+                    id: this.getView().getId(),
+                    name: "com.capexrevex.capexrevex.view.Fragments.EventDetailsDialog",
+                    controller: this
+                }).then(function (oPopover) {
+                    that._oEventDetailsPopover = oPopover;
+                    that.getView().addDependent(that._oEventDetailsPopover);
+
+                    // Set the model for the fragment
+                    that._oEventDetailsPopover.setModel(that.getView().getModel("view"), "view");
+                    that._oEventDetailsPopover.setModel(that.getView().getModel("attendees"), "attendees");
+
+                    that._oEventDetailsPopover.openBy(oSource);
+
+                    // Set attendees tokens after the fragment is rendered
+                    setTimeout(function () {
+                        that._setAttendeesTokens();
+                    }, 100);
+                }).catch(function (error) {
+                    console.error("Error loading event details fragment:", error);
+                    MessageToast.show("Error loading event details");
+                });
+            } else {
+                // Set the model for the fragment
+                this._oEventDetailsPopover.setModel(this.getView().getModel("view"), "view");
+                this._oEventDetailsPopover.setModel(this.getView().getModel("attendees"), "attendees");
+
+                // Open the popover
+                this._oEventDetailsPopover.openBy(oSource);
+
+                // Set attendees tokens
+                this._setAttendeesTokens();
+            }
+        },
+
+        _setAttendeesTokens: function () {
+            var oViewModel = this.getView().getModel("view");
+            var sAttendees = oViewModel.getProperty("/selectedEvent/attendees") || "";
+
+            // Get the MultiInput control from the fragment
+            var oMultiInput = Fragment.byId(this.getView().getId(), "eventAttendees");
+            if (!oMultiInput) {
+                console.error("MultiInput control not found in fragment");
+                return;
+            }
+
+            // Clear existing tokens
+            oMultiInput.destroyTokens();
+
+            // Parse attendees and create tokens
+            var aAttendees = this._parseAttendees(sAttendees);
+            aAttendees.forEach(function (oAttendee) {
+                var oToken = new Token({
+                    key: oAttendee.email,
+                    text: oAttendee.name + " (" + oAttendee.email + ")"
+                });
+                oMultiInput.addToken(oToken);
+            });
+        },
+
+        // Extract attendees from appointment data
+        _extractAttendeesFromAppointment: function (oAppointment) {
+            var aAttendees = [];
+
+            // Handle different appointment types
+            if (oAppointment.requiredAttendees) {
+                aAttendees = aAttendees.concat(this._parseAttendees(oAppointment.requiredAttendees));
+            }
+            if (oAppointment.optionalAttendees) {
+                aAttendees = aAttendees.concat(this._parseAttendees(oAppointment.optionalAttendees));
+            }
+            if (oAppointment.internalAttendees) {
+                aAttendees = aAttendees.concat(this._parseAttendees(oAppointment.internalAttendees));
+            }
+            if (oAppointment.guestEmail) {
+                aAttendees.push({
+                    name: oAppointment.guestName || oAppointment.guestEmail,
+                    email: oAppointment.guestEmail,
+                    status: "Free"
+                });
+            }
+            if (oAppointment.attendees) {
+                aAttendees = aAttendees.concat(this._parseAttendees(oAppointment.attendees));
+            }
+
+            return aAttendees;
+        },
+
+        // Parse attendees string into objects
+        _parseAttendees: function (sAttendees) {
+            if (!sAttendees) return [];
+
+            if (typeof sAttendees === 'string') {
+                return sAttendees.split(';').map(function (sAttendee) {
+                    sAttendee = sAttendee.trim();
+                    if (sAttendee) {
+                        return {
+                            name: sAttendee,
+                            email: sAttendee,
+                            status: "Free"
+                        };
+                    }
+                    return null;
+                }).filter(Boolean);
+            } else if (Array.isArray(sAttendees)) {
+                return sAttendees;
+            }
+
+            return [];
+        },
+
+        // Modified onSaveEvent method to handle attendees
+        onSaveEvent: function () {
+            var oViewModel = this.getView().getModel("view");
+            var sPath = oViewModel.getProperty("/selectedEventPath");
+
+            // Get values from the fragment controls
+            var oTitleControl = Fragment.byId(this.getView().getId(), "eventTitle");
+            var oStartDateControl = Fragment.byId(this.getView().getId(), "eventStartDate");
+            var oStartTimeControl = Fragment.byId(this.getView().getId(), "eventStartTime");
+            var oEndDateControl = Fragment.byId(this.getView().getId(), "eventEndDate");
+            var oEndTimeControl = Fragment.byId(this.getView().getId(), "eventEndTime");
+            var oLocationControl = Fragment.byId(this.getView().getId(), "eventLocation");
+            var oDescriptionControl = Fragment.byId(this.getView().getId(), "eventDescription");
+            var oAllDayControl = Fragment.byId(this.getView().getId(), "allDayCheckbox");
+            var oAttendeesControl = Fragment.byId(this.getView().getId(), "eventAttendees");
+
+            // Validate controls exist
+            if (!oTitleControl || !oStartDateControl || !oStartTimeControl ||
+                !oEndDateControl || !oEndTimeControl || !oLocationControl ||
+                !oDescriptionControl || !oAllDayControl || !oAttendeesControl) {
+                MessageToast.show("Error: Could not find all form controls");
+                return;
+            }
+
+            // Get values
+            var sTitle = oTitleControl.getValue();
+            var oStartDate = oStartDateControl.getDateValue();
+            var oStartTime = oStartTimeControl.getDateValue();
+            var oEndDate = oEndDateControl.getDateValue();
+            var oEndTime = oEndTimeControl.getDateValue();
+            var sLocation = oLocationControl.getValue();
+            var sDescription = oDescriptionControl.getValue();
+            var bAllDay = oAllDayControl.getSelected();
+
+            // Get attendees
+            var aTokens = oAttendeesControl.getTokens();
+            var sAttendees = aTokens.map(function (oToken) {
+                return oToken.getKey();
+            }).join("; ");
+
+            // Validate required fields
+            if (!sTitle) {
+                MessageToast.show("Please enter a title for the event");
+                return;
+            }
+
+            if (!oStartDate || !oEndDate) {
+                MessageToast.show("Please enter valid start and end dates");
+                return;
+            }
+
+            // Combine date and time
+            var oStart = new Date(oStartDate);
+            if (!bAllDay && oStartTime) {
+                oStart.setHours(oStartTime.getHours(), oStartTime.getMinutes(), 0, 0);
+            } else if (bAllDay) {
+                oStart.setHours(0, 0, 0, 0);
+            }
+
+            var oEnd = new Date(oEndDate);
+            if (!bAllDay && oEndTime) {
+                oEnd.setHours(oEndTime.getHours(), oEndTime.getMinutes(), 0, 0);
+            } else if (bAllDay) {
+                oEnd.setHours(23, 59, 59, 999);
+            }
+
+            // Validate that end time is after start time
+            if (oEnd <= oStart) {
+                MessageToast.show("End time must be after start time");
+                return;
+            }
+
+            // Check if this is a new appointment or editing existing one
+            if (sPath) {
+                // Update existing appointment
+                var oModel = this.getView().getModel();
+                oModel.setProperty(sPath + "/title", sTitle);
+                oModel.setProperty(sPath + "/start", oStart);
+                oModel.setProperty(sPath + "/end", oEnd);
+                oModel.setProperty(sPath + "/allDay", bAllDay);
+                oModel.setProperty(sPath + "/info", sLocation);
+                oModel.setProperty(sPath + "/location", sLocation);
+                oModel.setProperty(sPath + "/description", sDescription);
+                oModel.setProperty(sPath + "/attendees", sAttendees);
+                MessageToast.show("Event updated successfully");
+            } else {
+                // Create new appointment
+                var newAppointment = {
+                    start: oStart,
+                    end: oEnd,
+                    title: sTitle,
+                    info: sLocation,
+                    type: "Type01",
+                    
+                    category: "Appointment",
+                    showAs: "Busy",
+                    recurrence: "Non-recurring",
+                    inPerson: "In-person",
+                    organizerStatus: "sent",
+                    attendeeStatus: "accepted",
+                    attendees: sAttendees,
+                    allDay: bAllDay,
+                    description: sDescription
+                };
+
+                // Add to the first person's appointments
+                var oModel = this.getView().getModel();
+                var aPeople = oModel.getProperty("/people");
+                if (aPeople && aPeople.length > 0) {
+                    aPeople[0].appointments.push(newAppointment);
+                    oModel.setProperty("/people", aPeople);
+                    MessageToast.show("New event '" + sTitle + "' has been created");
+                } else {
+                    MessageToast.show("Error: Could not find calendar to add event");
+                    return;
+                }
+            }
+
+            // Close the popover
+            if (this._oEventDetailsPopover) {
+                this._oEventDetailsPopover.close();
+            }
+
+            // Refresh the calendar
+            this.byId("calendar").getBinding("rows").refresh(true);
+        },
+
+        // Modified onDiscardEvent method
+        onDiscardEvent: function () {
+            // Close the popover without saving
+            if (this._oEventDetailsPopover) {
+                this._oEventDetailsPopover.close();
+            }
+            MessageToast.show("Changes discarded");
+        },
+
+        // Fragment handling functions
+        _openRemarksDialog: function () {
+            // Reset status properties
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/attendeeStatus/eventwAttendeesStatus", "");
+
+            if (!this._oRemarksDialog) {
+                // Load RemarksDialog (must match file path & name exactly)
+                this._oRemarksDialog = new sap.ui.xmlfragment(this.getView().getId(),  // always pass view id for scoping
+                    "com.capexrevex.capexrevex.Fragments.RemarksDialog", // no .fragment.xml here
+                    this);
+                this.getView().addDependent(this._oRemarksDialog);
+
+                // Set the models for the fragment
+                this._oRemarksDialog.setModel(this.getView().getModel());
+                this._oRemarksDialog.setModel(this.getView().getModel("attendees"), "attendees");
+
+                this._oRemarksDialog.open();
+            }
+
+            // Set default values for new event
+            var oEventDate = UI5Date.getInstance();
+            oEventDate.setHours(16, 0, 0, 0);
+            var oEnd = UI5Date.getInstance(oEventDate);
+            oEnd.setHours(16, 30, 0, 0);
+
+            var oViewModel = this.getView().getModel("view");
+            oViewModel.setProperty("/selectedEvent", {
+                title: "",
+                start: oEventDate,
+                end: oEnd,
+                info: "",
+                type: "Type01",
+                icon: "",
+                attendees: [],
+                attendeeStatus: "", // Initialize attendee status
+                isNew: true
+            });
+
+            this._oRemarksDialog.open();
+        },
+
+        // Update your save function to ensure it works
+        onSaveEventFromDialog: function () {
+            try {
+                var oViewModel = this.getView().getModel("view");
+                var sTitle = Fragment.byId(this.getView().getId(), "eventwTitle").getValue();
+
+                // Get attendees from MultiInput
+                var oAttendeesInput = Fragment.byId(this.getView().getId(), "eventwAttendees");
+                var aTokens = oAttendeesInput.getTokens();
+                var sAttendees = aTokens.map(function (oToken) {
+                    return oToken.getKey();
+                }).join("; ");
+
+                // Validate required fields
+                if (!sTitle) {
+                    MessageToast.show("Please enter a title for the event");
+                    return;
+                }
+
+                // Get other form values and create the event
+                var newAppointment = {
+                    start: oViewModel.getProperty("/selectedEvent/start"),
+                    end: oViewModel.getProperty("/selectedEvent/end"),
+                    title: sTitle,
+                    pic: "sap-icon://video",
+                    info: "Event with attendees",
+                    type: "Type01",
+                    attendees: sAttendees,
+                    category: "Appointment",
+                    showAs: "Busy"
+                };
+
+                // Add to calendar
+                var oModel = this.getView().getModel();
+                var aPeople = oModel.getProperty("/people");
+
+                if (aPeople && aPeople.length > 0) {
+                    aPeople[0].appointments.push(newAppointment);
+                    oModel.setProperty("/people", aPeople);
+
+                    // Close dialog
+                    if (this._oRemarksDialog) {
+                        this._oRemarksDialog.close();
+                    }
+
+                    MessageToast.show("Event '" + sTitle + "' has been created");
+                    this.byId("calendar").getBinding("rows").refresh(true);
+                }
+            } catch (error) {
+                console.error("Error saving event:", error);
+                MessageToast.show("Error creating event");
+            }
+        },
+
+        onCancelEventFromDialog: function () {
+            // Close the dialog without saving
+            if (this._oRemarksDialog) {
+                this._oRemarksDialog.close();
+            }
+        },
+
+        onToggleGroupMode: function () {
+            var oViewModel = this.getView().getModel("view");
+            var sMode = oViewModel.getProperty("/groupMode");
+            oViewModel.setProperty("/groupMode", sMode === "Group" ? "None" : "Group");
+            this.byId("calendar").rerender();
+        },
+
+        // Meet Now functionality
+        onMeetNowPress: function () {
+            this._openMeetNowDialog();
+        },
+
+        _openMeetNowDialog: function () {
+            // Create dialog if it doesn't exist
+            if (!this._oMeetNowDialog) {
+                // Create meeting name input
+                var oMeetingNameInput = new Input({
+                    placeholder: "Enter meeting name",
+                    value: "Meeting with Nadeem Abbas",
+                    liveChange: function (oEvent) {
+                        this._sMeetingName = oEvent.getParameter("value");
+                    }.bind(this)
+                });
+
+                // Create start meeting button
+                var oStartButton = new Button({
+                    text: "Start meeting",
+                    type: "Emphasized",
+                    press: function () {
+                        this._startMeetingDirect();
+                    }.bind(this)
+                });
+
+                // Create get link button
+                var oGetLinkButton = new Button({
+                    text: "Get a link to share",
+                    icon: "sap-icon://chain-link",
+                    press: function () {
+                        this._getMeetingLink();
+                    }.bind(this)
+                });
+
+                // Create dialog with BOTH buttons
+                this._oMeetNowDialog = new Dialog({
+                    title: "Start a meeting now",
+                    content: [
+                        new Text({ text: "Meeting name" }),
+                        oMeetingNameInput,
+                        new Text({
+                            // text: "This will open Microsoft Teams directly with the meeting link.",
+                            class: "sapUiSmallMarginTop"
+                        })
+                    ],
+                    beginButton: oStartButton,
+                    endButton: oGetLinkButton, // Add the second button here
+                    afterClose: function () {
+                        // Reset meeting name when dialog closes
+                        oMeetingNameInput.setValue("Meeting with Nadeem Abbas");
+                    }
+                });
+
+                // Add dialog to view as dependent
+                this.getView().addDependent(this._oMeetNowDialog);
+            }
+
+            // Open dialog
+            this._oMeetNowDialog.open();
+        },
+
+        // Simplified version that just opens the Teams link
+        _startMeetingDirect: function () {
+            var meetingName = this._sMeetingName || "Meeting with Nadeem Abbas";
+
+            // The Teams meeting link
+            var joinUrl = "https://teams.microsoft.com/meet/4326770710049?p=BLkTTilSIc40mXD6CS";
+
+            // Create a simple calendar event
+            this._createMeetingEvent(meetingName, joinUrl);
+
+            // Close the dialog
+            if (this._oMeetNowDialog) {
+                this._oMeetNowDialog.close();
+            }
+
+            // Open the Teams link directly
+            window.open(joinUrl, "_blank");
+
+            MessageToast.show("Opening Microsoft Teams meeting...");
+        },
+
+        _getMeetingLink: function () {
+            // The correct meeting link as specified
+            var meetingLink = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_OGI5NmRmNDEtODc0Ni00MGNhLThlNjQtYzAyYTY2NzA5Yzhk%40thread.v2/0?context=%7b%22Tid%22%3a%229b95bc3c-fada-4090-b06b-0f54c08cc340%22%2c%22Oid%22%3a%22bef22b80-5884-4ba0-9774-00c706633cb5%22%7d";
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(meetingLink).then(function () {
+                MessageToast.show("Meeting link copied to clipboard");
+            }).catch(function (err) {
+                console.error('Could not copy text: ', err);
+                MessageToast.show("Failed to copy link");
+            });
+
+            // Close the dialog
+            if (this._oMeetNowDialog) {
+                this._oMeetNowDialog.close();
+            }
+        },
+
+        _createMeetingEvent: function (meetingName, meetingLink) {
+            var oNow = UI5Date.getInstance();
+            var oStart = UI5Date.getInstance(oNow);
+            var oEnd = UI5Date.getInstance(oStart);
+            oEnd.setHours(oEnd.getHours() + 1); // 1 hour meeting
+
+            var newAppointment = {
+                start: oStart,
+                end: oEnd,
+                title: meetingName,
+                info: "Online Meeting",
+                type: "Type01",
+                pic: "sap-icon://video",
+                category: "Meeting",
+                showAs: "Busy",
+                recurrence: "Non-recurring",
+                inPerson: "Virtual",
+                organizerStatus: "sent",
+                attendeeStatus: "accepted",
+                isOnline: true,
+                meetingLink: meetingLink || ""
+            };
+
+            // Get the model and add the new appointment to the first person's calendar
+            var oModel = this.getView().getModel();
+            var aPeople = oModel.getProperty("/people");
+
+            if (aPeople && aPeople.length > 0) {
+                aPeople[0].appointments.push(newAppointment);
+                oModel.setProperty("/people", aPeople);
+
+                // Refresh the calendar to show the new appointment
+                this.byId("calendar").getBinding("rows").refresh(true);
+            }
+        },
+
+        // Join meeting functionality with late join detection
+        onJoinMeeting: function () {
+            var oViewModel = this.getView().getModel("view");
+            var oSelectedEvent = oViewModel.getProperty("/selectedEvent");
+            var oNow = UI5Date.getInstance();
+            var oEventStart = new Date(oSelectedEvent.start);
+
+            // Calculate time difference in minutes
+            var iDiffMinutes = (oNow - oEventStart) / (1000 * 60);
+
+            // Check if user is joining 30+ minutes late
+            if (iDiffMinutes > 30) {
+                // Create a new event starting now and ending 30 minutes later
+                var oNewStart = UI5Date.getInstance(oNow);
+                var oNewEnd = UI5Date.getInstance(oNow);
+                oNewEnd.setMinutes(oNewEnd.getMinutes() + 30);
+
+                var newAppointment = {
+                    start: oNewStart,
+                    end: oNewEnd,
+                    title: "Follow-up: " + oSelectedEvent.title,
+                    info: oSelectedEvent.info || "",
+                    type: "Type01",
+                    category: "Meeting",
+                    showAs: "Busy",
+                    recurrence: "Non-recurring",
+                    inPerson: oSelectedEvent.inPerson || "Virtual",
+                    organizerStatus: "sent",
+                    attendeeStatus: "accepted",
+                    meetingLink: oSelectedEvent.meetingLink || ""
+                };
+
+                // Add to the first person's appointments
+                var oModel = this.getView().getModel();
+                var aPeople = oModel.getProperty("/people");
+
+                if (aPeople && aPeople.length > 0) {
+                    aPeople[0].appointments.push(newAppointment);
+                    oModel.setProperty("/people", aPeople);
+                    MessageToast.show("Created a new follow-up meeting for 30 minutes");
+                }
+
+                // Show popup message
+                MessageToast.show("The meeting has ended, please join the new meeting.");
+            }
+
+            // Use the fixed Teams meeting link provided in the requirement
+            var sMeetingLink = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_MGQ0NGJjODQtMGEyMC00MjJiLTg3NzMtYTEyYTdlMjk4YTI4%40thread.v2/0?context=%7b%22Tid%22%3a%229b95bc3c-fada";
+
+            // Open the meeting link
+            sap.m.URLHelper.redirect(sMeetingLink, true);
+        }
+    });
+});
+
+
+
+
 UPDATED CODE 12
 
 sap.ui.define([
